@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4A90D9">
+    <meta name="description" content="透析病人数据记录应用，帮助您轻松管理透析健康数据">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="肾友日记">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>肾友日记 - 透析健康管理</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Favicon和图标 -->
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+    <link rel="apple-touch-icon" href="icons/icon.svg">
+    
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 顶部导航 -->
+        <header class="app-header">
+            <h1>肾友日记</h1>
+            <p class="subtitle">透析健康管理助手</p>
+        </header>
+
+        <!-- 主内容区域 -->
+        <main class="main-content">
+            <!-- 首页/概览 -->
+            <section id="page-home" class="page active">
+                <!-- 视图切换 -->
+                <div class="view-toggle">
+                    <button id="btn-calendar-view" class="toggle-btn active" onclick="HomePage.switchView('calendar')">📅 日历</button>
+                    <button id="btn-list-view" class="toggle-btn" onclick="HomePage.switchView('list')">📋 列表</button>
+                </div>
+
+                <!-- 日历视图 -->
+                <div id="calendar-view">
+                    <div class="calendar-header">
+                        <button class="calendar-nav-btn" onclick="HomePage.prevMonth()">←</button>
+                        <span id="calendar-title">2024年1月</span>
+                        <button class="calendar-nav-btn" onclick="HomePage.nextMonth()">→</button>
+                    </div>
+                    <div class="calendar-weekdays">
+                        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+                    </div>
+                    <div id="calendar-days" class="calendar-days"></div>
+                </div>
+
+                <!-- 列表视图 -->
+                <div id="list-view" style="display: none;">
+                    <div class="overview-cards">
+                        <div class="card">
+                            <div class="card-title">本周透析</div>
+                            <div class="card-value" id="week-count">0</div>
+                            <div class="card-unit">次</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">本月透析</div>
+                            <div class="card-value" id="month-count">0</div>
+                            <div class="card-unit">次</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-title">总记录</div>
+                            <div class="card-value" id="total-count">0</div>
+                            <div class="card-unit">次</div>
+                        </div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <h2>快速记录</h2>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary" onclick="showPage('page-record-hd')">
+                                <span class="btn-icon">🩺</span>
+                                <span>血液透析</span>
+                            </button>
+                            <button class="btn btn-secondary" onclick="showPage('page-record-pd')">
+                                <span class="btn-icon">💊</span>
+                                <span>腹膜透析</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="recent-records">
+                        <h2>最近记录</h2>
+                        <div id="recent-list" class="record-list">
+                            <p class="empty-tip">暂无记录，点击上方按钮开始记录</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 血液透析记录页 -->
+            <section id="page-record-hd" class="page">
+                <div class="page-header">
+                    <button class="btn-back" onclick="showPage('page-home')">← 返回</button>
+                    <h2>血液透析记录</h2>
+                </div>
+                <form id="form-hd" class="record-form">
+                    <div class="form-group">
+                        <label for="hd-date">透析日期 <span class="required">*</span></label>
+                        <input type="date" id="hd-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="hd-shift">透析班次 <span class="required">*</span></label>
+                        <select id="hd-shift" required onchange="onShiftChange()">
+                            <option value="">请选择班次</option>
+                            <option value="morning">早班 (6:30-10:30)</option>
+                            <option value="midday">中班 (11:30-15:30)</option>
+                            <option value="evening">晚班 (16:30-20:30)</option>
+                            <option value="custom">自定义时间</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="hd-mode">透析类型</label>
+                        <select id="hd-mode">
+                            <option value="normal">正常</option>
+                            <option value="hemofiltration">血滤</option>
+                            <option value="perfusion">灌流</option>
+                        </select>
+                    </div>
+                    <div class="form-row" id="hd-time-row" style="display: none;">
+                        <div class="form-group">
+                            <label for="hd-start-time">开始时间</label>
+                            <input type="time" id="hd-start-time">
+                        </div>
+                        <div class="form-group">
+                            <label for="hd-end-time">结束时间</label>
+                            <input type="time" id="hd-end-time">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="hd-bed">透析床位</label>
+                        <input type="text" id="hd-bed" placeholder="如：3楼A区12床">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="hd-weight-before">透析前体重(kg) <span class="required">*</span></label>
+                            <input type="number" id="hd-weight-before" step="0.1" placeholder="如：65.5" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="hd-weight-after">透析后体重(kg)</label>
+                            <input type="number" id="hd-weight-after" step="0.1" placeholder="如：63.0">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="hd-target-uf">目标脱水量(ml)</label>
+                            <input type="number" id="hd-target-uf" placeholder="如：2500">
+                        </div>
+                        <div class="form-group">
+                            <label for="hd-actual-uf">实际脱水量(ml)</label>
+                            <input type="number" id="hd-actual-uf" placeholder="如：2400">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="hd-bp-before">透析前血压</label>
+                            <input type="text" id="hd-bp-before" placeholder="如：140/90">
+                        </div>
+                        <div class="form-group">
+                            <label for="hd-bp-after">透析后血压</label>
+                            <input type="text" id="hd-bp-after" placeholder="如：130/80">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>烤电记录</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-heating" value="红外线照射"> 红外线照射
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-heating" value="中频理疗"> 中频理疗
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-heating" value="低频理疗"> 低频理疗
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-heating" value="超短波治疗"> 超短波治疗
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-heating" value="其他"> 其他
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="hd-heating-duration">烤电时长(分钟)</label>
+                        <input type="number" id="hd-heating-duration" placeholder="如：30">
+                    </div>
+                    <div class="form-group">
+                        <label>不良反应</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-reaction" value="低血压"> 低血压
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-reaction" value="抽筋"> 抽筋
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-reaction" value="恶心"> 恶心
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-reaction" value="头晕"> 头晕
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="hd-reaction" value="无"> 无
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="hd-notes">备注</label>
+                        <div id="hd-template-btns" class="template-btns">
+                            <!-- 模板按钮将动态生成 -->
+                        </div>
+                        <textarea id="hd-notes" rows="3" placeholder="其他需要记录的内容..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="showPage('page-home')">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="saveHDRecord()">保存记录</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- 腹膜透析记录页 -->
+            <section id="page-record-pd" class="page">
+                <div class="page-header">
+                    <button class="btn-back" onclick="showPage('page-home')">← 返回</button>
+                    <h2>腹膜透析记录</h2>
+                </div>
+                <form id="form-pd" class="record-form">
+                    <div class="form-group">
+                        <label for="pd-date">透析日期 <span class="required">*</span></label>
+                        <input type="date" id="pd-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pd-concentration">透析液浓度 <span class="required">*</span></label>
+                        <select id="pd-concentration" required>
+                            <option value="">请选择</option>
+                            <option value="1.5%">1.5%</option>
+                            <option value="2.5%">2.5%</option>
+                            <option value="4.25%">4.25%</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="pd-inflow">灌入量(ml) <span class="required">*</span></label>
+                            <input type="number" id="pd-inflow" placeholder="如：2000" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="pd-outflow">排出量(ml) <span class="required">*</span></label>
+                            <input type="number" id="pd-outflow" placeholder="如：2100" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="pd-dwell-time">留腹时间 <span class="required">*</span></label>
+                        <input type="text" id="pd-dwell-time" placeholder="如：4小时" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pd-fluid-appearance">透析液性状</label>
+                        <select id="pd-fluid-appearance">
+                            <option value="">请选择</option>
+                            <option value="清亮">清亮</option>
+                            <option value="微浑">微浑</option>
+                            <option value="浑浊">浑浊</option>
+                            <option value="血性">血性</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="pd-weight">体重(kg)</label>
+                            <input type="number" id="pd-weight" step="0.1" placeholder="如：65.5">
+                        </div>
+                        <div class="form-group">
+                            <label for="pd-bp">血压</label>
+                            <input type="text" id="pd-bp" placeholder="如：130/80">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>不良反应</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="pd-reaction" value="腹痛"> 腹痛
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="pd-reaction" value="发热"> 发热
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="pd-reaction" value="水肿"> 水肿
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="pd-reaction" value="无"> 无
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="pd-notes">备注</label>
+                        <div id="pd-template-btns" class="template-btns">
+                            <!-- 模板按钮将动态生成 -->
+                        </div>
+                        <textarea id="pd-notes" rows="3" placeholder="其他需要记录的内容..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="showPage('page-home')">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="savePDRecord()">保存记录</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- 历史记录页 -->
+            <section id="page-history" class="page">
+                <div class="page-header">
+                    <button class="btn-back" onclick="showPage('page-home')">← 返回</button>
+                    <h2>历史记录</h2>
+                </div>
+                <div class="filter-bar">
+                    <select id="filter-type" onchange="filterRecords()">
+                        <option value="all">全部类型</option>
+                        <option value="hd">血液透析</option>
+                        <option value="pd">腹膜透析</option>
+                    </select>
+                    <select id="filter-year" onchange="filterRecords()">
+                        <option value="">全部年份</option>
+                    </select>
+                    <select id="filter-month" onchange="filterRecords()">
+                        <option value="">全部月份</option>
+                        <option value="01">1月</option>
+                        <option value="02">2月</option>
+                        <option value="03">3月</option>
+                        <option value="04">4月</option>
+                        <option value="05">5月</option>
+                        <option value="06">6月</option>
+                        <option value="07">7月</option>
+                        <option value="08">8月</option>
+                        <option value="09">9月</option>
+                        <option value="10">10月</option>
+                        <option value="11">11月</option>
+                        <option value="12">12月</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary btn-small sort-btn" id="sort-order-btn" onclick="toggleSortOrder()">
+                        <span id="sort-icon">↓</span> 最新优先
+                    </button>
+                </div>
+                <div id="history-list" class="record-list">
+                    <p class="empty-tip">暂无记录</p>
+                </div>
+            </section>
+
+            <!-- 统计页 -->
+            <section id="page-stats" class="page">
+                <div class="page-header">
+                    <button class="btn-back" onclick="showPage('page-home')">← 返回</button>
+                    <h2>数据统计</h2>
+                </div>
+                <div class="stats-container">
+                    <div class="stats-card">
+                        <h3>透析统计</h3>
+                        <div class="stats-row">
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-total">0</div>
+                                <div class="stats-label">总透析次数</div>
+                            </div>
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-hd">0</div>
+                                <div class="stats-label">血液透析</div>
+                            </div>
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-pd">0</div>
+                                <div class="stats-label">腹膜透析</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stats-card">
+                        <h3>体重变化</h3>
+                        <div style="height: 200px;">
+                            <canvas id="weight-chart"></canvas>
+                        </div>
+                        <div class="stats-row">
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-avg-weight">--</div>
+                                <div class="stats-label">平均透析前体重</div>
+                            </div>
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-avg-uf">--</div>
+                                <div class="stats-label">平均脱水量(ml)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stats-card">
+                        <h3>脱水量趋势</h3>
+                        <div style="height: 200px;">
+                            <canvas id="uf-chart"></canvas>
+                        </div>
+                        <div class="stats-row">
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-total-uf">--</div>
+                                <div class="stats-label">总脱水量(ml)</div>
+                            </div>
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-max-uf">--</div>
+                                <div class="stats-label">最大脱水量(ml)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stats-card">
+                        <h3>最近30天</h3>
+                        <div class="stats-row">
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-30days">0</div>
+                                <div class="stats-label">透析次数</div>
+                            </div>
+                            <div class="stats-item">
+                                <div class="stats-value" id="stats-avg-weekly">0</div>
+                                <div class="stats-label">平均每周</div>
+                            </div>
+                        </div>
+                        <div style="height: 200px;">
+                            <canvas id="frequency-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="stats-card" id="monthly-report-card">
+                        <h3>本月统计</h3>
+                        <div id="monthly-report">
+                            <p class="empty-tip">加载中...</p>
+                        </div>
+                    </div>
+                    <div class="stats-card">
+                        <h3>血压趋势</h3>
+                        <div style="height: 180px;">
+                            <canvas id="bp-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="stats-card">
+                        <h3>超滤率分析</h3>
+                        <div style="height: 180px;">
+                            <canvas id="ufr-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 设置页 -->
+            <section id="page-settings" class="page">
+                <div class="page-header">
+                    <button class="btn-back" onclick="showPage('page-home')">← 返回</button>
+                    <h2>个人设置</h2>
+                </div>
+                <div class="settings-form">
+                    <div class="form-group">
+                        <div class="theme-switch">
+                            <span class="theme-switch-label">外观模式</span>
+                            <div class="theme-switch-options">
+                                <button type="button" class="theme-btn" id="theme-auto" onclick="setTheme('auto')">自动</button>
+                                <button type="button" class="theme-btn" id="theme-light" onclick="setTheme('light')">浅色</button>
+                                <button type="button" class="theme-btn" id="theme-dark" onclick="setTheme('dark')">深色</button>
+                            </div>
+                        </div>
+                    </div>
+                    <hr class="divider">
+                    <div class="form-group">
+                        <label for="dry-weight">干体重(kg)</label>
+                        <input type="number" id="dry-weight" step="0.1" placeholder="医生设定的干体重">
+                    </div>
+                    <div class="form-group">
+                        <label for="dialysis-type">主要透析类型</label>
+                        <select id="dialysis-type">
+                            <option value="hd">血液透析</option>
+                            <option value="pd">腹膜透析</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="default-shift">透析班次</label>
+                        <select id="default-shift">
+                            <option value="">请选择</option>
+                            <option value="morning">早班 (6:30-10:30)</option>
+                            <option value="midday">中班 (11:30-15:30)</option>
+                            <option value="evening">晚班 (16:30-20:30)</option>
+                        </select>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                    </div>
+                    <hr class="divider">
+                    <div class="form-group">
+                        <label>备注模板</label>
+                        <p class="import-tip">添加常用备注模板，方便快速填写</p>
+                        <div id="template-list" class="template-list">
+                            <!-- 模板列表将动态生成 -->
+                        </div>
+                        <div class="template-add">
+                            <input type="text" id="new-template" placeholder="输入新模板内容..." maxlength="100">
+                            <button type="button" class="btn btn-secondary btn-small" onclick="addNoteTemplate()">添加</button>
+                        </div>
+                    </div>
+                    <hr class="divider">
+                    <div class="form-group">
+                        <label>数据管理</label>
+                        <div class="button-group">
+                            <button type="button" class="btn btn-secondary" onclick="exportData()">导出数据</button>
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('import-file').click()">导入数据</button>
+                            <input type="file" id="import-file" accept=".csv,.json" style="display:none" onchange="importData(this)">
+                        </div>
+                        <p class="import-tip">支持导入CSV或JSON格式文件</p>
+                    </div>
+                    <div class="form-group">
+                        <label>危险操作</label>
+                        <div class="button-group">
+                            <button type="button" class="btn btn-danger" onclick="clearAllData()">清除所有数据</button>
+                            <button type="button" class="btn btn-secondary" onclick="document.querySelectorAll('.nav-item').forEach(i=>i.style.pointerEvents='');showToast('已修复')">修复导航</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- 底部导航 -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" onclick="showPage('page-home')">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">首页</span>
+            </button>
+            <button class="nav-item" onclick="showPage('page-history')">
+                <span class="nav-icon">📋</span>
+                <span class="nav-label">记录</span>
+            </button>
+            <button class="nav-item" onclick="showPage('page-stats')">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">统计</span>
+            </button>
+            <button class="nav-item" onclick="showPage('page-settings')">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">设置</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Toast提示 -->
+    <div id="toast" class="toast"></div>
+
+    <!-- 删除确认模态框 -->
+    <div id="delete-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>确认删除</h3>
+            </div>
+            <div class="modal-body">
+                <p>确定要删除这条记录吗？</p>
+                <p class="modal-hint">此操作无法撤销</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">取消</button>
+                <button class="btn btn-danger" id="confirm-delete-btn">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/constants.js"></script>
+    <script src="js/utils/helpers.js"></script>
+    <script src="js/utils/validate.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/utils/import-export.js"></script>
+    <script src="js/components/theme.js"></script>
+    <script src="js/components/note-templates.js"></script>
+    <script src="js/components/forms.js"></script>
+    <script src="js/pages/home.js"></script>
+    <script src="js/pages/history.js"></script>
+    <script src="js/pages/stats.js"></script>
+    <script src="js/pages/settings.js"></script>
+    <script src="js/app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    
+    <!-- Service Worker 注册 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker 注册成功:', registration.scope);
+                    })
+                    .catch(function(error) {
+                        console.log('ServiceWorker 注册失败:', error);
+                    });
+            });
+        }
+        
+        // PWA 安装提示
+        let deferredPrompt;
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // 显示安装按钮（可选）
+            const installBtn = document.getElementById('install-btn');
+            if (installBtn) {
+                installBtn.style.display = 'block';
+                installBtn.addEventListener('click', () => {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('用户同意安装PWA');
+                        }
+                        deferredPrompt = null;
+                    });
+                });
+            }
+        });
+        
+        window.addEventListener('appinstalled', () => {
+            console.log('PWA 已安装');
+            const installBtn = document.getElementById('install-btn');
+            if (installBtn) {
+                installBtn.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+    "name": "肾友日记 - 透析健康管理",
+    "short_name": "肾友日记",
+    "description": "透析病人数据记录应用，帮助您轻松管理透析健康数据",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#f5f7fa",
+    "theme_color": "#4A90D9",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }
+    ],
+    "categories": ["health", "medical", "lifestyle"],
+    "lang": "zh-CN",
+    "dir": "ltr",
+    "scope": "./",
+    "prefer_related_applications": false
+}

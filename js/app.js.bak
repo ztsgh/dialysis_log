@@ -1,0 +1,2045 @@
+/**
+ * 肾友日记 - 透析记录Demo
+ * 使用LocalStorage存储数据
+ */
+
+// ==================== 数据管理 ====================
+
+const DATA_KEY = 'dialysis_records';
+const SETTINGS_KEY = 'dialysis_settings';
+
+// 编辑状态
+let editingRecordId = null; // 当前正在编辑的记录ID，null表示新增模式
+
+// 数据缓存
+let recordsCache = null;
+let settingsCache = null;
+
+// ID 计数器（用于生成唯一 ID）
+let idCounter = 0;
+
+// 生成唯一 ID（时间戳 + 随机数 + 计数器，确保唯一性）
+function generateUniqueId() {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 10000);
+    idCounter = (idCounter + 1) % 10000;
+    return timestamp * 10000 + random * 10 + idCounter;
+}
+
+// 获取所有记录（带缓存）
+function getRecords() {
+    if (recordsCache === null) {
+        const data = localStorage.getItem(DATA_KEY);
+        recordsCache = data ? JSON.parse(data) : [];
+    }
+    return recordsCache;
+}
+
+// 清除数据缓存
+function clearRecordsCache() {
+    recordsCache = null;
+}
+
+// 保存记录
+function saveRecords(records) {
+    localStorage.setItem(DATA_KEY, JSON.stringify(records));
+    recordsCache = records; // 更新缓存
+}
+
+// 添加新记录
+function addRecord(record) {
+    const records = getRecords();
+    record.id = generateUniqueId();
+    record.createdAt = new Date().toISOString();
+    records.unshift(record); // 新记录放在最前面
+    saveRecords(records);
+    return record;
+}
+
+// 更新记录
+function updateRecord(id, updatedData) {
+    const records = getRecords();
+    const index = records.findIndex(r => r.id === id);
+    if (index !== -1) {
+        records[index] = { ...records[index], ...updatedData, updatedAt: new Date().toISOString() };
+        saveRecords(records);
+        return records[index];
+    }
+    return null;
+}
+
+// 删除记录
+function deleteRecord(id) {
+    const records = getRecords();
+    const filtered = records.filter(r => r.id !== id);
+    saveRecords(filtered);
+}
+
+// 获取设置（带缓存）
+function getSettings() {
+    if (settingsCache === null) {
+        const data = localStorage.getItem(SETTINGS_KEY);
+        settingsCache = data ? JSON.parse(data) : {
+            dryWeight: '',
+            dialysisType: 'hd',
+            defaultShift: '',
+            theme: 'auto',
+            noteTemplates: []
+        };
+    }
+    return settingsCache;
+}
+
+// 保存设置
+function saveSettingsToStorage(settings) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    settingsCache = settings; // 更新缓存
+}
+
+// ==================== 页面导航 ====================
+
+function showPage(pageId) {
+    // 只在非记录编辑页面时重置编辑状态
+    // 编辑页面需要在 editRecord() 中设置 editingRecordId 后再调用 showPage()
+    if (pageId !== 'page-record-hd' && pageId !== 'page-record-pd') {
+        editingRecordId = null;
+    }
+    
+    // 隐藏所有页面
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+    });
+    
+    // 显示目标页面
+    const targetPage = document.getElementById(pageId);
+    if (targetPage) {
+        targetPage.classList.add('active');
+    }
+    
+    // 更新底部导航状态
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    const navMap = {
+        'page-home': 0,
+        'page-history': 1,
+        'page-stats': 2,
+        'page-settings': 3
+    };
+    
+    if (navMap[pageId] !== undefined) {
+        document.querySelectorAll('.nav-item')[navMap[pageId]].classList.add('active');
+    }
+    
+    // 根据页面加载数据
+    if (pageId === 'page-home') {
+        loadHomePage();
+    } else if (pageId === 'page-history') {
+        loadHistoryPage();
+    } else if (pageId === 'page-stats') {
+        loadStatsPage();
+    } else if (pageId === 'page-settings') {
+        loadSettingsPage();
+    }
+}
+
+// ==================== 首页 ====================
+
+function loadHomePage() {
+    const records = getRecords();
+    const now = new Date();
+    
+    // 计算本周记录数
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekRecords = records.filter(r => new Date(r.date) >= weekStart);
+    document.getElementById('week-count').textContent = weekRecords.length;
+    
+    // 计算本月记录数
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthRecords = records.filter(r => new Date(r.date) >= monthStart);
+    document.getElementById('month-count').textContent = monthRecords.length;
+    
+    // 总记录数
+    document.getElementById('total-count').textContent = records.length;
+    
+    // 显示最近5条记录
+    const recentList = document.getElementById('recent-list');
+    const recentRecords = records.slice(0, 5);
+    
+    if (recentRecords.length === 0) {
+        recentList.innerHTML = '<p class="empty-tip">暂无记录，点击上方按钮开始记录</p>';
+    } else {
+        recentList.innerHTML = recentRecords.map(r => createRecordItem(r)).join('');
+    }
+}
+
+// 创建记录项HTML
+function createRecordItem(record) {
+    const typeClass = record.type === 'hd' ? 'hd' : 'pd';
+    const typeText = record.type === 'hd' ? '🩺 血液透析' : '💊 腹膜透析';
+    const dateStr = formatDate(record.date);
+    const detailsHtml = generateRecordDetailsHtml(record);
+    
+    // 新布局：日期在上中间，班次在右，其他信息紧凑显示
+    return `
+        <div class="record-item" onclick="viewRecordDetail(${record.id})">
+            <div class="record-item-header">
+                <span class="record-type ${typeClass}">${typeText}</span>
+                <span class="record-date">${escapeHtml(dateStr)}</span>
+            </div>
+            <div class="record-item-body">
+                ${detailsHtml}
+            </div>
+        </div>
+    `;
+}
+
+// ==================== 历史记录页 ====================
+
+// 排序状态：true = 最新优先（倒序），false = 最早优先（正序）
+let sortDescending = true;
+
+function loadHistoryPage() {
+    updateYearFilter();
+    updateSortButton();
+    filterRecords();
+}
+
+// 切换排序顺序
+function toggleSortOrder() {
+    sortDescending = !sortDescending;
+    updateSortButton();
+    filterRecords();
+}
+
+// 更新排序按钮显示
+function updateSortButton() {
+    const btn = document.getElementById('sort-order-btn');
+    const icon = document.getElementById('sort-icon');
+    if (sortDescending) {
+        icon.textContent = '↓';
+        btn.innerHTML = '<span id="sort-icon">↓</span> 最新优先';
+    } else {
+        btn.innerHTML = '<span id="sort-icon">↑</span> 最早优先';
+    }
+}
+
+// 更新年份筛选器
+function updateYearFilter() {
+    const records = getRecords();
+    const yearSelect = document.getElementById('filter-year');
+    const currentYear = new Date().getFullYear();
+    
+    // 获取所有记录中的年份
+    const years = new Set();
+    records.forEach(r => {
+        if (r.date) {
+            const year = r.date.split('-')[0];
+            if (year) years.add(year);
+        }
+    });
+    
+    // 添加当前年份（如果没有记录）
+    years.add(currentYear.toString());
+    
+    // 排序年份（降序）
+    const sortedYears = Array.from(years).sort((a, b) => b - a);
+    
+    // 构建选项
+    yearSelect.innerHTML = '<option value="">全部年份</option>';
+    sortedYears.forEach(year => {
+        yearSelect.innerHTML += `<option value="${year}">${year}年</option>`;
+    });
+    
+    // 默认选择当前年份
+    yearSelect.value = currentYear.toString();
+}
+
+function filterRecords() {
+    const typeFilter = document.getElementById('filter-type').value;
+    const yearFilter = document.getElementById('filter-year').value;
+    const monthFilter = document.getElementById('filter-month').value;
+    
+    let records = getRecords();
+    
+    // 类型筛选
+    if (typeFilter !== 'all') {
+        records = records.filter(r => r.type === typeFilter);
+    }
+    
+    // 年份筛选
+    if (yearFilter) {
+        records = records.filter(r => r.date && r.date.startsWith(yearFilter));
+    }
+    
+    // 月份筛选
+    if (monthFilter) {
+        records = records.filter(r => {
+            if (!r.date) return false;
+            const month = r.date.split('-')[1];
+            return month === monthFilter;
+        });
+    }
+    
+    // 按日期排序
+    records.sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return sortDescending ? (dateB - dateA) : (dateA - dateB);
+    });
+    
+    const historyList = document.getElementById('history-list');
+    
+    if (records.length === 0) {
+        historyList.innerHTML = '<p class="empty-tip">暂无符合条件的记录</p>';
+    } else {
+        historyList.innerHTML = records.map(r => createRecordItemWithActions(r)).join('');
+    }
+}
+
+// 创建带操作按钮的记录项（改为点击进入编辑，与首页一致）
+function createRecordItemWithActions(record) {
+    const typeClass = record.type === 'hd' ? 'hd' : 'pd';
+    const typeText = record.type === 'hd' ? '🩺 血液透析' : '💊 腹膜透析';
+    const dateStr = formatDate(record.date);
+    const detailsHtml = generateRecordDetailsHtml(record);
+    
+    // 与首页记录条目一致，点击即可进入编辑
+    return `
+        <div class="record-item" onclick="viewRecordDetail(${record.id})">
+            <div class="record-item-header">
+                <span class="record-type ${typeClass}">${typeText}</span>
+                <span class="record-date">${escapeHtml(dateStr)}</span>
+            </div>
+            <div class="record-item-body">
+                ${detailsHtml}
+            </div>
+        </div>
+    `;
+}
+
+// 待删除的记录ID
+let pendingDeleteId = null;
+
+// 删除记录确认（显示模态框）
+function deleteRecordConfirm(id) {
+    pendingDeleteId = id;
+    const modal = document.getElementById('delete-modal');
+    modal.classList.add('show');
+}
+
+// 关闭删除模态框
+function closeDeleteModal() {
+    pendingDeleteId = null;
+    const modal = document.getElementById('delete-modal');
+    modal.classList.remove('show');
+}
+
+// 确认删除
+function confirmDelete() {
+    if (pendingDeleteId !== null) {
+        deleteRecord(pendingDeleteId);
+        showToast('记录已删除');
+        closeDeleteModal();
+        filterRecords();
+        loadHomePage();
+    }
+}
+
+// ==================== 统计页 ====================
+
+function loadStatsPage() {
+    const records = getRecords();
+    
+    // 总体统计
+    const hdRecords = records.filter(r => r.type === 'hd');
+    const pdRecords = records.filter(r => r.type === 'pd');
+    
+    document.getElementById('stats-total').textContent = records.length;
+    document.getElementById('stats-hd').textContent = hdRecords.length;
+    document.getElementById('stats-pd').textContent = pdRecords.length;
+    
+    // 体重和脱水量统计（仅血液透析）
+    if (hdRecords.length > 0) {
+        const weights = hdRecords.filter(r => r.weightBefore).map(r => parseFloat(r.weightBefore));
+        const ufs = hdRecords.filter(r => r.actualUF).map(r => parseFloat(r.actualUF));
+        
+        if (weights.length > 0) {
+            const avgWeight = (weights.reduce((a, b) => a + b, 0) / weights.length).toFixed(1);
+            document.getElementById('stats-avg-weight').textContent = avgWeight;
+        }
+        
+        if (ufs.length > 0) {
+            const avgUF = Math.round(ufs.reduce((a, b) => a + b, 0) / ufs.length);
+            document.getElementById('stats-avg-uf').textContent = avgUF;
+        }
+    }
+    
+    // 最近30天统计
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const recentRecords = records.filter(r => new Date(r.date) >= thirtyDaysAgo);
+    
+    document.getElementById('stats-30days').textContent = recentRecords.length;
+    document.getElementById('stats-avg-weekly').textContent = (recentRecords.length / 4.3).toFixed(1);
+    
+    // 绘制体重趋势图
+    renderWeightChart(hdRecords);
+    
+    // 绘制脱水量趋势图
+    renderUFChart(hdRecords);
+    
+    // 绘制透析频率分析图
+    renderFrequencyChart(records);
+}
+
+// 绘制体重趋势图
+function renderWeightChart(hdRecords) {
+    const chartContainer = document.getElementById('weight-chart');
+    
+    if (hdRecords.length === 0) {
+        chartContainer.innerHTML = '<p>记录数据后显示体重趋势</p>';
+        return;
+    }
+    
+    // 获取最近10条有体重数据的记录，按日期排序
+    const recordsWithWeight = hdRecords
+        .filter(r => r.weightBefore && r.weightAfter)
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .slice(-10);
+    
+    if (recordsWithWeight.length === 0) {
+        chartContainer.innerHTML = '<p>暂无体重数据</p>';
+        return;
+    }
+    
+    // 计算体重范围
+    const allWeights = recordsWithWeight.flatMap(r => [parseFloat(r.weightBefore), parseFloat(r.weightAfter)]);
+    const minWeight = Math.min(...allWeights) - 1;
+    const maxWeight = Math.max(...allWeights) + 1;
+    const weightRange = maxWeight - minWeight;
+    
+    // 计算数据点坐标（用于SVG连线）
+    const chartWidth = 100; // 使用百分比
+    const chartHeight = 100; // 使用百分比
+    const pointCount = recordsWithWeight.length;
+    
+    const beforePoints = [];
+    const afterPoints = [];
+    
+    recordsWithWeight.forEach((record, index) => {
+        const weightBefore = parseFloat(record.weightBefore);
+        const weightAfter = parseFloat(record.weightAfter);
+        
+        // 计算位置百分比
+        const xPercent = (index / (pointCount - 1 || 1)) * chartWidth;
+        const beforeY = ((weightBefore - minWeight) / weightRange) * chartHeight;
+        const afterY = ((weightAfter - minWeight) / weightRange) * chartHeight;
+        
+        beforePoints.push({ x: xPercent, y: chartHeight - beforeY, weight: weightBefore });
+        afterPoints.push({ x: xPercent, y: chartHeight - afterY, weight: weightAfter });
+    });
+    
+    // 生成SVG路径
+    function generatePath(points) {
+        if (points.length < 2) return '';
+        return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    }
+    
+    const beforePath = generatePath(beforePoints);
+    const afterPath = generatePath(afterPoints);
+    
+    // 生成图表HTML
+    let chartHtml = '<div class="weight-chart">';
+    
+    // Y轴标签
+    chartHtml += '<div class="chart-y-axis">';
+    chartHtml += `<span>${maxWeight.toFixed(1)}</span>`;
+    chartHtml += `<span>${((maxWeight + minWeight) / 2).toFixed(1)}</span>`;
+    chartHtml += `<span>${minWeight.toFixed(1)}</span>`;
+    chartHtml += '</div>';
+    
+    // 图表区域
+    chartHtml += '<div class="chart-area">';
+    
+    // 网格线
+    chartHtml += '<div class="chart-grid">';
+    chartHtml += '<div class="grid-line"></div>';
+    chartHtml += '<div class="grid-line"></div>';
+    chartHtml += '<div class="grid-line"></div>';
+    chartHtml += '</div>';
+    
+    // SVG连线层
+    if (beforePath || afterPath) {
+        chartHtml += '<svg class="chart-lines" viewBox="0 0 100 100" preserveAspectRatio="none">';
+        if (beforePath) {
+            chartHtml += `<path class="chart-line chart-line-before" d="${beforePath}" vector-effect="non-scaling-stroke"/>`;
+        }
+        if (afterPath) {
+            chartHtml += `<path class="chart-line chart-line-after" d="${afterPath}" vector-effect="non-scaling-stroke"/>`;
+        }
+        chartHtml += '</svg>';
+    }
+    
+    // 数据点
+    chartHtml += '<div class="chart-points">';
+    
+    recordsWithWeight.forEach((record, index) => {
+        const weightBefore = parseFloat(record.weightBefore);
+        const weightAfter = parseFloat(record.weightAfter);
+        
+        // 计算位置百分比（从底部算起）
+        const beforePercent = ((weightBefore - minWeight) / weightRange) * 100;
+        const afterPercent = ((weightAfter - minWeight) / weightRange) * 100;
+        
+        // 日期标签
+        const date = new Date(record.date);
+        const dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
+        
+        chartHtml += `
+            <div class="chart-point-group" style="left: ${(index / (recordsWithWeight.length - 1 || 1)) * 100}%;">
+                <div class="point point-before" style="bottom: ${beforePercent}%;" title="透前: ${weightBefore}kg">
+                    <span class="point-value">${weightBefore}</span>
+                </div>
+                <div class="point point-after" style="bottom: ${afterPercent}%;" title="透后: ${weightAfter}kg">
+                    <span class="point-value">${weightAfter}</span>
+                </div>
+                <span class="point-label">${dateLabel}</span>
+            </div>
+        `;
+    });
+    
+    chartHtml += '</div>';
+    chartHtml += '</div>';
+    chartHtml += '</div>';
+    
+    // 图例
+    chartHtml += `
+        <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot before"></span>透前体重</span>
+            <span class="legend-item"><span class="legend-dot after"></span>透后体重</span>
+        </div>
+    `;
+    
+    chartContainer.innerHTML = chartHtml;
+}
+
+// 绘制脱水量趋势图
+function renderUFChart(hdRecords) {
+    const chartContainer = document.getElementById('uf-chart');
+    
+    if (hdRecords.length === 0) {
+        chartContainer.innerHTML = '<p>记录数据后显示脱水量趋势</p>';
+        return;
+    }
+    
+    // 获取最近10条有脱水量数据的记录，按日期排序
+    const recordsWithUF = hdRecords
+        .filter(r => r.actualUF)
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .slice(-10);
+    
+    if (recordsWithUF.length === 0) {
+        chartContainer.innerHTML = '<p>暂无脱水量数据</p>';
+        return;
+    }
+    
+    // 计算脱水量范围
+    const ufValues = recordsWithUF.map(r => parseFloat(r.actualUF));
+    const minUF = Math.min(...ufValues);
+    const maxUF = Math.max(...ufValues);
+    const ufRange = maxUF - minUF || 100; // 避免范围为0
+    
+    // 计算总脱水量和最大脱水量
+    const totalUF = ufValues.reduce((a, b) => a + b, 0);
+    document.getElementById('stats-total-uf').textContent = Math.round(totalUF);
+    document.getElementById('stats-max-uf').textContent = maxUF;
+    
+    // 计算数据点坐标
+    const chartHeight = 100;
+    const pointCount = recordsWithUF.length;
+    const ufPoints = [];
+    
+    recordsWithUF.forEach((record, index) => {
+        const uf = parseFloat(record.actualUF);
+        const xPercent = (index / (pointCount - 1 || 1)) * 100;
+        const yPercent = ((uf - minUF) / ufRange) * chartHeight;
+        ufPoints.push({ x: xPercent, y: chartHeight - yPercent, uf: uf });
+    });
+    
+    // 生成SVG路径
+    function generateUFPath(points) {
+        if (points.length < 2) return '';
+        return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    }
+    
+    const ufPath = generateUFPath(ufPoints);
+    
+    // 生成图表HTML
+    let chartHtml = '<div class="weight-chart uf-chart">';
+    
+    // Y轴标签
+    chartHtml += '<div class="chart-y-axis">';
+    chartHtml += `<span>${maxUF}</span>`;
+    chartHtml += `<span>${Math.round((maxUF + minUF) / 2)}</span>`;
+    chartHtml += `<span>${minUF}</span>`;
+    chartHtml += '</div>';
+    
+    // 图表区域
+    chartHtml += '<div class="chart-area">';
+    
+    // 网格线
+    chartHtml += '<div class="chart-grid">';
+    chartHtml += '<div class="grid-line"></div>';
+    chartHtml += '<div class="grid-line"></div>';
+    chartHtml += '<div class="grid-line"></div>';
+    chartHtml += '</div>';
+    
+    // SVG连线层
+    if (ufPath) {
+        chartHtml += '<svg class="chart-lines" viewBox="0 0 100 100" preserveAspectRatio="none">';
+        chartHtml += `<path class="chart-line chart-line-uf" d="${ufPath}" vector-effect="non-scaling-stroke"/>`;
+        chartHtml += '</svg>';
+    }
+    
+    // 数据点
+    chartHtml += '<div class="chart-points">';
+    
+    recordsWithUF.forEach((record, index) => {
+        const uf = parseFloat(record.actualUF);
+        const ufPercent = ((uf - minUF) / ufRange) * 100;
+        
+        const date = new Date(record.date);
+        const dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
+        
+        chartHtml += `
+            <div class="chart-point-group" style="left: ${(index / (recordsWithUF.length - 1 || 1)) * 100}%;">
+                <div class="point point-uf" style="bottom: ${ufPercent}%;" title="脱水量: ${uf}ml">
+                    <span class="point-value">${uf}</span>
+                </div>
+                <span class="point-label">${dateLabel}</span>
+            </div>
+        `;
+    });
+    
+    chartHtml += '</div>';
+    chartHtml += '</div>';
+    chartHtml += '</div>';
+    
+    // 图例
+    chartHtml += `
+        <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot uf"></span>脱水量(ml)</span>
+        </div>
+    `;
+    
+    chartContainer.innerHTML = chartHtml;
+}
+
+// 绘制透析频率分析图（最近4周）
+function renderFrequencyChart(records) {
+    const chartContainer = document.getElementById('frequency-chart');
+    
+    if (records.length === 0) {
+        chartContainer.innerHTML = '<p>记录数据后显示频率分析</p>';
+        return;
+    }
+    
+    // 计算最近4周的透析次数
+    const now = new Date();
+    const weeklyData = [];
+    
+    for (let i = 3; i >= 0; i--) {
+        const weekEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - (i * 7), 23, 59, 59, 999));
+        const weekStart = new Date(Date.UTC(weekEnd.getUTCFullYear(), weekEnd.getUTCMonth(), weekEnd.getUTCDate() - 6, 0, 0, 0, 0));
+        
+        const weekRecords = records.filter(r => {
+            const date = new Date(r.date + 'T00:00:00');
+            return date >= weekStart && date <= weekEnd;
+        });
+        
+        const hdCount = weekRecords.filter(r => r.type === 'hd').length;
+        const pdCount = weekRecords.filter(r => r.type === 'pd').length;
+        
+        weeklyData.push({
+            label: `${weekStart.getMonth() + 1}/${weekStart.getDate()}`,
+            hd: hdCount,
+            pd: pdCount,
+            total: hdCount + pdCount
+        });
+    }
+    
+    const maxCount = Math.max(...weeklyData.map(w => w.total), 1);
+    
+    // 生成柱状图HTML
+    let chartHtml = '<div class="bar-chart">';
+    
+    // 柱状图区域
+    chartHtml += '<div class="bar-chart-bars">';
+    
+    weeklyData.forEach((week, index) => {
+        const hdHeight = (week.hd / maxCount) * 100;
+        const pdHeight = (week.pd / maxCount) * 100;
+        
+        chartHtml += `
+            <div class="bar-group">
+                <div class="bar-container">
+                    ${week.pd > 0 ? `<div class="bar bar-pd" style="height: ${pdHeight}%;" title="腹膜透析: ${week.pd}次"></div>` : ''}
+                    ${week.hd > 0 ? `<div class="bar bar-hd" style="height: ${hdHeight}%;" title="血液透析: ${week.hd}次"></div>` : ''}
+                </div>
+                <span class="bar-label">${week.label}</span>
+                <span class="bar-value">${week.total}</span>
+            </div>
+        `;
+    });
+    
+    chartHtml += '</div>';
+    chartHtml += '</div>';
+    
+    // 图例
+    chartHtml += `
+        <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot hd"></span>血液透析</span>
+            <span class="legend-item"><span class="legend-dot pd"></span>腹膜透析</span>
+        </div>
+    `;
+    
+    chartContainer.innerHTML = chartHtml;
+}
+
+// ==================== 设置页 ====================
+
+function loadSettingsPage() {
+    const settings = getSettings();
+    document.getElementById('dry-weight').value = settings.dryWeight || '';
+    document.getElementById('dialysis-type').value = settings.dialysisType || 'hd';
+    document.getElementById('default-shift').value = settings.defaultShift || '';
+    
+    // 更新主题按钮状态
+    updateThemeButtons(settings.theme || 'auto');
+    
+    // 加载备注模板
+    loadNoteTemplates();
+    
+    // 加载提醒设置
+    loadReminderSettings();
+}
+
+// ==================== 备注模板管理 ====================
+
+// 加载并显示模板列表
+function loadNoteTemplates() {
+    const settings = getSettings();
+    const templates = settings.noteTemplates || [];
+    const templateList = document.getElementById('template-list');
+    
+    if (templates.length === 0) {
+        templateList.innerHTML = '<p class="empty-tip">暂无模板，添加后可在记录表单中快速使用</p>';
+    } else {
+        templateList.innerHTML = templates.map((template, index) => `
+            <div class="template-item">
+                <span class="template-text">${escapeHtml(template)}</span>
+                <button type="button" class="btn btn-secondary btn-small" onclick="deleteNoteTemplate(${index})">删除</button>
+            </div>
+        `).join('');
+    }
+    
+    // 更新表单中的模板按钮
+    updateTemplateButtons();
+}
+
+// 添加新模板
+function addNoteTemplate() {
+    const input = document.getElementById('new-template');
+    const text = input.value.trim();
+    
+    if (!text) {
+        showToast('请输入模板内容');
+        return;
+    }
+    
+    const settings = getSettings();
+    if (!settings.noteTemplates) {
+        settings.noteTemplates = [];
+    }
+    
+    // 检查是否已存在相同模板
+    if (settings.noteTemplates.includes(text)) {
+        showToast('该模板已存在');
+        return;
+    }
+    
+    // 限制模板数量
+    if (settings.noteTemplates.length >= 10) {
+        showToast('最多添加10个模板');
+        return;
+    }
+    
+    settings.noteTemplates.push(text);
+    saveSettingsToStorage(settings);
+    
+    input.value = '';
+    loadNoteTemplates();
+    showToast('模板已添加');
+}
+
+// 删除模板
+function deleteNoteTemplate(index) {
+    const settings = getSettings();
+    if (settings.noteTemplates && settings.noteTemplates.length > index) {
+        settings.noteTemplates.splice(index, 1);
+        saveSettingsToStorage(settings);
+        loadNoteTemplates();
+        showToast('模板已删除');
+    }
+}
+
+// 插入模板到备注框
+function insertTemplate(text, targetId) {
+    const textarea = document.getElementById(targetId);
+    if (!textarea) return;
+    
+    const currentValue = textarea.value;
+    const newValue = currentValue ? currentValue + ' ' + text : text;
+    textarea.value = newValue;
+    textarea.focus();
+}
+
+// 更新表单中的模板按钮
+function updateTemplateButtons() {
+    const settings = getSettings();
+    const templates = settings.noteTemplates || [];
+    
+    // 更新血液透析表单的模板按钮
+    const hdContainer = document.getElementById('hd-template-btns');
+    if (hdContainer) {
+        if (templates.length === 0) {
+            hdContainer.innerHTML = '';
+        } else {
+            hdContainer.innerHTML = templates.map((template, index) => `
+                <button type="button" class="template-btn" data-template-index="${index}" data-target="hd-notes">${escapeHtml(template)}</button>
+            `).join('');
+        }
+    }
+    
+    // 更新腹膜透析表单的模板按钮
+    const pdContainer = document.getElementById('pd-template-btns');
+    if (pdContainer) {
+        if (templates.length === 0) {
+            pdContainer.innerHTML = '';
+        } else {
+            pdContainer.innerHTML = templates.map((template, index) => `
+                <button type="button" class="template-btn" data-template-index="${index}" data-target="pd-notes">${escapeHtml(template)}</button>
+            `).join('');
+        }
+    }
+    
+    // 为所有模板按钮添加事件监听器（使用事件委托，避免特殊字符问题）
+    document.querySelectorAll('.template-btn[data-template-index]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-template-index'));
+            const targetId = this.getAttribute('data-target');
+            const settings = getSettings();
+            const templates = settings.noteTemplates || [];
+            if (templates[index]) {
+                insertTemplate(templates[index], targetId);
+            }
+        });
+    });
+}
+
+function saveSettings() {
+    const settings = {
+        dryWeight: document.getElementById('dry-weight').value,
+        dialysisType: document.getElementById('dialysis-type').value,
+        defaultShift: document.getElementById('default-shift').value,
+        theme: getSettings().theme || 'auto',
+        noteTemplates: getSettings().noteTemplates || []
+    };
+    saveSettingsToStorage(settings);
+    
+    // 保存提醒设置
+    saveReminderFromForm();
+    
+    showToast('设置已保存');
+}
+
+// ==================== 深色模式 ====================
+
+// 应用主题
+function applyTheme(theme) {
+    const root = document.documentElement;
+    
+    // 移除所有主题类
+    root.classList.remove('dark-mode', 'light-mode');
+    
+    if (theme === 'dark') {
+        root.classList.add('dark-mode');
+    } else if (theme === 'light') {
+        root.classList.add('light-mode');
+    }
+    // 'auto' 时不添加任何类，让 CSS 媒体查询自动处理
+}
+
+// 设置主题
+function setTheme(theme) {
+    const settings = getSettings();
+    settings.theme = theme;
+    saveSettingsToStorage(settings);
+    
+    applyTheme(theme);
+    updateThemeButtons(theme);
+    showToast('主题已更改');
+}
+
+// 更新主题按钮状态
+function updateThemeButtons(activeTheme) {
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    const activeBtn = document.getElementById(`theme-${activeTheme}`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+    }
+}
+
+// 初始化主题
+function initTheme() {
+    const settings = getSettings();
+    const theme = settings.theme || 'auto';
+    applyTheme(theme);
+    updateThemeButtons(theme);
+}
+
+// ==================== 表单处理 ====================
+
+// 班次时间配置
+const SHIFT_TIMES = {
+    morning: { start: '06:30', end: '10:30', label: '早班' },
+    midday: { start: '11:30', end: '15:30', label: '中班' },
+    evening: { start: '16:30', end: '20:30', label: '晚班' }
+};
+
+// 班次选择变化处理
+function onShiftChange() {
+    const shiftSelect = document.getElementById('hd-shift');
+    const timeRow = document.getElementById('hd-time-row');
+    const startTimeInput = document.getElementById('hd-start-time');
+    const endTimeInput = document.getElementById('hd-end-time');
+    
+    const selectedShift = shiftSelect.value;
+    
+    if (selectedShift === 'custom') {
+        // 显示自定义时间输入框
+        timeRow.style.display = 'grid';
+        startTimeInput.value = '';
+        endTimeInput.value = '';
+        startTimeInput.required = true;
+        endTimeInput.required = true;
+    } else if (SHIFT_TIMES[selectedShift]) {
+        // 隐藏自定义时间输入框，自动填充时间
+        timeRow.style.display = 'none';
+        startTimeInput.value = SHIFT_TIMES[selectedShift].start;
+        endTimeInput.value = SHIFT_TIMES[selectedShift].end;
+        startTimeInput.required = false;
+        endTimeInput.required = false;
+    } else {
+        // 未选择班次
+        timeRow.style.display = 'none';
+        startTimeInput.value = '';
+        endTimeInput.value = '';
+        startTimeInput.required = false;
+        endTimeInput.required = false;
+    }
+}
+
+// 透析方式配置
+const DIALYSIS_MODES = {
+    normal: '正常',
+    hemofiltration: '血滤',
+    perfusion: '灌流'
+};
+
+// 初始化表单默认值
+function initForms() {
+    // 重置编辑状态
+    editingRecordId = null;
+    
+    // 设置默认日期为今天
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('hd-date').value = today;
+    document.getElementById('pd-date').value = today;
+    
+    // 重置班次选择
+    document.getElementById('hd-shift').value = '';
+    document.getElementById('hd-time-row').style.display = 'none';
+    document.getElementById('hd-start-time').value = '';
+    document.getElementById('hd-end-time').value = '';
+    
+    // 重置透析方式为默认
+    document.getElementById('hd-mode').value = 'normal';
+    
+    // 清空所有表单字段
+    document.getElementById('hd-bed').value = '';
+    document.getElementById('hd-weight-before').value = '';
+    document.getElementById('hd-weight-after').value = '';
+    document.getElementById('hd-target-uf').value = '';
+    document.getElementById('hd-actual-uf').value = '';
+    document.getElementById('hd-bp-before').value = '';
+    document.getElementById('hd-bp-after').value = '';
+    document.getElementById('hd-heating-duration').value = '';
+    document.getElementById('hd-notes').value = '';
+    
+    // 清空烤电选项
+    document.querySelectorAll('input[name="hd-heating"]').forEach(cb => cb.checked = false);
+    
+    // 清空不良反应选项
+    document.querySelectorAll('input[name="hd-reaction"]').forEach(cb => cb.checked = false);
+    
+    // 清空腹膜透析表单
+    document.getElementById('pd-concentration').value = '';
+    document.getElementById('pd-inflow').value = '';
+    document.getElementById('pd-outflow').value = '';
+    document.getElementById('pd-dwell-time').value = '';
+    document.getElementById('pd-fluid-appearance').value = '';
+    document.getElementById('pd-weight').value = '';
+    document.getElementById('pd-bp').value = '';
+    document.getElementById('pd-notes').value = '';
+    document.querySelectorAll('input[name="pd-reaction"]').forEach(cb => cb.checked = false);
+    
+    // 加载默认班次设置
+    const settings = getSettings();
+    if (settings.defaultShift) {
+        document.getElementById('hd-shift').value = settings.defaultShift;
+        // 触发班次变化处理，自动填充时间
+        onShiftChange();
+    }
+    
+    // 更新表单标题
+    updateFormTitle('hd', '血液透析记录');
+    updateFormTitle('pd', '腹膜透析记录');
+}
+
+// 更新表单标题
+function updateFormTitle(type, title) {
+    const pageHeader = document.querySelector(`#page-record-${type} .page-header h2`);
+    if (pageHeader) {
+        pageHeader.textContent = title;
+    }
+}
+
+// ==================== 数据验证 ====================
+
+// 验证体重范围（20kg - 200kg）
+function validateWeight(value, fieldName) {
+    if (!value) return { valid: true }; // 非必填字段可以为空
+    const num = parseFloat(value);
+    if (isNaN(num) || num < 20 || num > 200) {
+        return { valid: false, message: `${fieldName}应在 20-200 kg 之间` };
+    }
+    return { valid: true };
+}
+
+// 验证脱水量范围（0 - 10000ml）
+function validateUF(value, fieldName) {
+    if (!value) return { valid: true };
+    const num = parseFloat(value);
+    if (isNaN(num) || num < 0 || num > 10000) {
+        return { valid: false, message: `${fieldName}应在 0-10000 ml 之间` };
+    }
+    return { valid: true };
+}
+
+// 验证血压格式（如：120/80）
+function validateBloodPressure(value, fieldName) {
+    if (!value) return { valid: true };
+    const pattern = /^(\d{2,3})\s*[\/\\]\s*(\d{2,3})$/;
+    if (!pattern.test(value)) {
+        return { valid: false, message: `${fieldName}格式不正确，应为如：120/80` };
+    }
+    const match = value.match(pattern);
+    const systolic = parseInt(match[1]);
+    const diastolic = parseInt(match[2]);
+    if (systolic < 60 || systolic > 250 || diastolic < 40 || diastolic > 150) {
+        return { valid: false, message: `${fieldName}数值异常，请检查` };
+    }
+    return { valid: true };
+}
+
+// 血液透析表单提交
+document.getElementById('form-hd').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // 获取班次信息
+    const shiftSelect = document.getElementById('hd-shift');
+    const selectedShift = shiftSelect.value;
+    
+    if (!selectedShift) {
+        showToast('请选择透析班次');
+        return;
+    }
+    
+    // 获取表单值
+    const weightBefore = document.getElementById('hd-weight-before').value;
+    const weightAfter = document.getElementById('hd-weight-after').value;
+    const actualUF = document.getElementById('hd-actual-uf').value;
+    const targetUF = document.getElementById('hd-target-uf').value;
+    const bpBefore = document.getElementById('hd-bp-before').value;
+    const bpAfter = document.getElementById('hd-bp-after').value;
+    
+    // 数据验证
+    const validations = [
+        validateWeight(weightBefore, '透析前体重'),
+        validateWeight(weightAfter, '透析后体重'),
+        validateUF(actualUF, '实际脱水量'),
+        validateUF(targetUF, '目标脱水量'),
+        validateBloodPressure(bpBefore, '透析前血压'),
+        validateBloodPressure(bpAfter, '透析后血压')
+    ];
+    
+    for (const v of validations) {
+        if (!v.valid) {
+            showToast(v.message);
+            return;
+        }
+    }
+    
+    // 验证透前体重应大于透后体重（改为警告，不强制阻止）
+    if (weightBefore && weightAfter && parseFloat(weightBefore) <= parseFloat(weightAfter)) {
+        // 某些情况下（如透析期间进食）体重可能不会下降，改为警告提示
+        if (!confirm('提示：透析前体重未大于透析后体重。\n\n这种情况可能发生在透析期间进食或饮水后。\n\n是否仍要保存此记录？')) {
+            return;
+        }
+    }
+    
+    // 获取烤电选项
+    const heating = [];
+    document.querySelectorAll('input[name="hd-heating"]:checked').forEach(cb => {
+        heating.push(cb.value);
+    });
+    
+    // 获取不良反应
+    const reactions = [];
+    document.querySelectorAll('input[name="hd-reaction"]:checked').forEach(cb => {
+        reactions.push(cb.value);
+    });
+    
+    // 获取班次标签
+    let shiftLabel = '';
+    if (selectedShift === 'custom') {
+        shiftLabel = '自定义';
+    } else if (SHIFT_TIMES[selectedShift]) {
+        shiftLabel = SHIFT_TIMES[selectedShift].label;
+    }
+    
+    const record = {
+        type: 'hd',
+        date: document.getElementById('hd-date').value,
+        shift: selectedShift,
+        shiftLabel: shiftLabel,
+        startTime: document.getElementById('hd-start-time').value,
+        endTime: document.getElementById('hd-end-time').value,
+        mode: document.getElementById('hd-mode').value,
+        bed: document.getElementById('hd-bed').value,
+        weightBefore: weightBefore,
+        weightAfter: weightAfter,
+        targetUF: targetUF,
+        actualUF: actualUF,
+        bpBefore: bpBefore,
+        bpAfter: bpAfter,
+        heating: heating,
+        heatingDuration: document.getElementById('hd-heating-duration').value,
+        reactions: reactions,
+        notes: document.getElementById('hd-notes').value
+    };
+    
+    if (editingRecordId) {
+        // 编辑模式
+        updateRecord(editingRecordId, record);
+        showToast('记录已更新');
+    } else {
+        // 新增模式
+        addRecord(record);
+        showToast('血液透析记录已保存');
+    }
+    
+    this.reset();
+    initForms();
+    showPage('page-home');
+});
+
+// 腹膜透析表单提交
+document.getElementById('form-pd').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // 获取表单值
+    const date = document.getElementById('pd-date').value;
+    const concentration = document.getElementById('pd-concentration').value;
+    const inflow = document.getElementById('pd-inflow').value;
+    const outflow = document.getElementById('pd-outflow').value;
+    const dwellTime = document.getElementById('pd-dwell-time').value;
+    const weight = document.getElementById('pd-weight').value;
+    const bp = document.getElementById('pd-bp').value;
+    
+    // 必填字段验证
+    if (!date) {
+        showToast('请选择透析日期');
+        return;
+    }
+    if (!concentration) {
+        showToast('请选择透析液浓度');
+        return;
+    }
+    if (!inflow) {
+        showToast('请输入灌入量');
+        return;
+    }
+    if (!outflow) {
+        showToast('请输入排出量');
+        return;
+    }
+    if (!dwellTime) {
+        showToast('请输入留腹时间');
+        return;
+    }
+    
+    // 数据验证
+    const validations = [
+        validateWeight(weight, '体重'),
+        validateBloodPressure(bp, '血压')
+    ];
+    
+    for (const v of validations) {
+        if (!v.valid) {
+            showToast(v.message);
+            return;
+        }
+    }
+    
+    // 验证灌入量和排出量范围
+    if (parseFloat(inflow) < 0 || parseFloat(inflow) > 5000) {
+        showToast('灌入量应在 0-5000 ml 之间');
+        return;
+    }
+    if (parseFloat(outflow) < 0 || parseFloat(outflow) > 5000) {
+        showToast('排出量应在 0-5000 ml 之间');
+        return;
+    }
+    
+    // 获取不良反应
+    const reactions = [];
+    document.querySelectorAll('input[name="pd-reaction"]:checked').forEach(cb => {
+        reactions.push(cb.value);
+    });
+    
+    const record = {
+        type: 'pd',
+        date: document.getElementById('pd-date').value,
+        concentration: document.getElementById('pd-concentration').value,
+        inflow: inflow,
+        outflow: outflow,
+        dwellTime: document.getElementById('pd-dwell-time').value,
+        fluidAppearance: document.getElementById('pd-fluid-appearance').value,
+        weight: weight,
+        bp: bp,
+        reactions: reactions,
+        notes: document.getElementById('pd-notes').value
+    };
+    
+    if (editingRecordId) {
+        // 编辑模式
+        updateRecord(editingRecordId, record);
+        showToast('记录已更新');
+    } else {
+        // 新增模式
+        addRecord(record);
+        showToast('腹膜透析记录已保存');
+    }
+    
+    this.reset();
+    initForms();
+    showPage('page-home');
+});
+
+// ==================== 数据导出 ====================
+
+// CSV 字段转义函数（处理逗号、引号、换行符）
+function escapeCSVField(field) {
+    if (field === null || field === undefined) return '';
+    const str = String(field);
+    // 如果包含逗号、引号或换行符，需要用引号包裹并转义内部引号
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+}
+
+function exportData() {
+    const records = getRecords();
+    if (records.length === 0) {
+        showToast('暂无数据可导出');
+        return;
+    }
+    
+    // 生成CSV内容
+    let csv = '\ufeff'; // UTF-8 BOM
+    csv += '日期,类型,班次/浓度,透析方式,体重前(kg),体重后(kg),目标脱水量(ml),实际脱水量(ml),血压前,血压后,床位,烤电,烤电时长(分钟),不良反应,备注\n';
+    
+    records.forEach(r => {
+        if (r.type === 'hd') {
+            const modeLabel = DIALYSIS_MODES[r.mode] || '正常';
+            csv += `${escapeCSVField(r.date)},血液透析,${escapeCSVField(r.shiftLabel)},${escapeCSVField(modeLabel)},${escapeCSVField(r.weightBefore)},${escapeCSVField(r.weightAfter)},${escapeCSVField(r.targetUF)},${escapeCSVField(r.actualUF)},${escapeCSVField(r.bpBefore)},${escapeCSVField(r.bpAfter)},${escapeCSVField(r.bed)},${escapeCSVField((r.heating || []).join('/'))},${escapeCSVField(r.heatingDuration)},${escapeCSVField((r.reactions || []).join('/'))},${escapeCSVField(r.notes)}\n`;
+        } else {
+            csv += `${escapeCSVField(r.date)},腹膜透析,${escapeCSVField(r.concentration)},,${escapeCSVField(r.weight)},,${escapeCSVField(r.inflow)},${escapeCSVField(r.outflow)},${escapeCSVField(r.dwellTime)},${escapeCSVField(r.fluidAppearance || '')},${escapeCSVField(r.bp)},,${escapeCSVField((r.reactions || []).join('/'))},${escapeCSVField(r.notes)}\n`;
+        }
+    });
+    
+    // 下载文件
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `透析记录_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    
+    showToast('数据已导出');
+}
+
+// ==================== 数据导入 ====================
+
+function importData(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    const fileName = file.name.toLowerCase();
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const content = e.target.result;
+            let importedRecords = [];
+            
+            if (fileName.endsWith('.json')) {
+                // 导入JSON格式
+                importedRecords = importFromJSON(content);
+            } else if (fileName.endsWith('.csv')) {
+                // 导入CSV格式
+                importedRecords = importFromCSV(content);
+            } else {
+                showToast('不支持的文件格式');
+                return;
+            }
+            
+            if (importedRecords.length === 0) {
+                showToast('没有有效数据可导入');
+                return;
+            }
+            
+            // 确认导入
+            if (confirm(`将导入 ${importedRecords.length} 条记录，是否继续？\n（现有数据将被保留）`)) {
+                // 合并数据
+                const existingRecords = getRecords();
+                const existingIds = new Set(existingRecords.map(r => r.id));
+                
+                // 为导入的记录分配新ID，避免重复
+                importedRecords.forEach(record => {
+                    if (!record.id || existingIds.has(record.id)) {
+                        record.id = generateUniqueId();
+                    }
+                    if (!record.createdAt) {
+                        record.createdAt = new Date().toISOString();
+                    }
+                });
+                
+                // 合并并保存
+                const mergedRecords = [...importedRecords, ...existingRecords];
+                // 按日期排序（最新的在前）
+                mergedRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+                saveRecords(mergedRecords);
+                
+                showToast(`成功导入 ${importedRecords.length} 条记录`);
+                
+                // 刷新页面数据
+                loadHomePage();
+            }
+        } catch (error) {
+            console.error('导入错误:', error);
+            showToast('导入失败：文件格式错误');
+        }
+    };
+    
+    reader.onerror = function() {
+        showToast('文件读取失败');
+    };
+    
+    reader.readAsText(file, 'UTF-8');
+    
+    // 清空input，允许重复导入同一文件
+    input.value = '';
+}
+
+// 从JSON导入
+function importFromJSON(content) {
+    try {
+        const data = JSON.parse(content);
+        // 支持数组或对象格式
+        if (Array.isArray(data)) {
+            return data.filter(r => r.type && r.date);
+        } else if (data.records && Array.isArray(data.records)) {
+            return data.records.filter(r => r.type && r.date);
+        }
+        return [];
+    } catch (e) {
+        console.error('JSON解析错误:', e);
+        return [];
+    }
+}
+
+// 从CSV导入
+function importFromCSV(content) {
+    try {
+        // 移除BOM标记
+        if (content.charCodeAt(0) === 0xFEFF) {
+            content = content.slice(1);
+        }
+        
+        // 处理不同换行符
+        content = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        
+        const lines = content.split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+        return [];
+    }
+    
+    const headers = parseCSVLine(lines[0]);
+        const records = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            const values = parseCSVLine(line);
+            
+            // 构建行数据对象
+            const row = {};
+            headers.forEach((h, idx) => {
+                row[h.trim()] = (values[idx] || '').trim();
+            });
+            
+            // 检查日期是否有效
+            if (!row['日期']) {
+                continue;
+            }
+            
+            // 解析类型
+            const type = row['类型'] === '腹膜透析' ? 'pd' : 'hd';
+            
+            // 标准化日期格式（确保月和日有前导零，支持 - 和 / 分隔符）
+            const normalizeDate = (dateStr) => {
+                if (!dateStr) return '';
+                // 去除前后空格
+                dateStr = dateStr.trim();
+                // 支持短横和斜杠两种分隔符
+                let parts = dateStr.split('-');
+                if (parts.length !== 3) {
+                    parts = dateStr.split('/');
+                }
+                if (parts.length === 3) {
+                    const year = parts[0].trim();
+                    const month = parts[1].trim().padStart(2, '0');
+                    const day = parts[2].trim().padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+                return dateStr.trim();
+            };
+            
+            if (type === 'hd') {
+                // 根据班次标签反推班次值
+                let shiftValue = '';
+                if (row['班次'] === '早班') shiftValue = 'morning';
+                else if (row['班次'] === '中班') shiftValue = 'midday';
+                else if (row['班次'] === '晚班') shiftValue = 'evening';
+                else if (row['班次']) shiftValue = 'custom';
+                
+                // 解析透析方式
+                let modeValue = 'normal';
+                if (row['透析方式'] === '血滤') modeValue = 'hemofiltration';
+                else if (row['透析方式'] === '灌流') modeValue = 'perfusion';
+                
+                const record = {
+                    id: generateUniqueId(),
+                    type: 'hd',
+                    date: normalizeDate(row['日期']),
+                    shift: shiftValue,
+                    shiftLabel: row['班次'] || '',
+                    startTime: '',
+                    endTime: '',
+                    mode: modeValue,
+                    bed: row['床位'] || '',
+                    weightBefore: row['体重前(kg)'] || '',
+                    weightAfter: row['体重后(kg)'] || '',
+                    actualUF: row['脱水量(ml)'] || '',
+                    bpBefore: row['血压前'] || '',
+                    bpAfter: row['血压后'] || '',
+                    heating: row['烤电'] ? row['烤电'].split('/') : [],
+                    heatingDuration: row['烤电时长(分钟)'] || '',
+                    reactions: row['不良反应'] ? row['不良反应'].split('/') : [],
+                    notes: row['备注'] || '',
+                    createdAt: new Date().toISOString()
+                };
+                records.push(record);
+            } else {
+                const record = {
+                    id: generateUniqueId(),
+                    type: 'pd',
+                    date: normalizeDate(row['日期']),
+                    concentration: row['浓度'] || '',
+                    inflow: row['灌入量(ml)'] || '',
+                    outflow: row['排出量(ml)'] || '',
+                    dwellTime: row['留腹时间'] || '',
+                    weight: row['体重前(kg)'] || '',
+                    bp: row['血压前'] || '',
+                    reactions: row['不良反应'] ? row['不良反应'].split('/') : [],
+                    notes: row['备注'] || '',
+                    createdAt: new Date().toISOString()
+                };
+                records.push(record);
+            }
+        }
+        
+        return records;
+    } catch (e) {
+        console.error('CSV解析错误:', e);
+        return [];
+    }
+}
+
+// 解析CSV行（处理引号内的逗号）
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            // 检查是否为转义引号（两个连续引号）
+            if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+                current += '"';
+                i++; // 跳过下一个引号
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current.trim());
+    
+    return result;
+}
+
+// 清除所有数据
+function clearAllData() {
+    if (confirm('确定要清除所有数据吗？此操作不可恢复！')) {
+        localStorage.removeItem(DATA_KEY);
+        localStorage.removeItem(SETTINGS_KEY);
+        // 清除缓存
+        recordsCache = null;
+        settingsCache = null;
+        showToast('所有数据已清除');
+        loadHomePage();
+    }
+}
+
+// ==================== 工具函数 ====================
+
+// HTML 转义函数（防止 XSS 攻击）
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+// 格式化日期
+function formatDate(dateStr) {
+    if (!dateStr) return '--';
+    
+    // 标准化日期格式，支持 - 和 / 分隔符
+    let normalizedDate = dateStr.trim();
+    if (normalizedDate.includes('/')) {
+        const parts = normalizedDate.split('/');
+        if (parts.length === 3) {
+            const year = parts[0].trim();
+            const month = parts[1].trim().padStart(2, '0');
+            const day = parts[2].trim().padStart(2, '0');
+            normalizedDate = `${year}-${month}-${day}`;
+        }
+    }
+    
+    const date = new Date(normalizedDate);
+    if (isNaN(date.getTime())) return '--';
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    return `${month}月${day}日 ${weekDays[date.getDay()]}`;
+}
+
+// 生成记录详情 HTML（公共函数，消除代码重复）
+function generateRecordDetailsHtml(record) {
+    let detailsHtml = '';
+    if (record.type === 'hd') {
+        // 透析类型显示
+        const modeLabel = DIALYSIS_MODES[record.mode] || '正常';
+        detailsHtml = `
+            <div class="record-detail">
+                <span class="record-detail-label">班次</span>
+                <span class="record-detail-value">${escapeHtml(record.shiftLabel) || '--'}</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">类型</span>
+                <span class="record-detail-value">${escapeHtml(modeLabel)}</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">透前体重</span>
+                <span class="record-detail-value">${escapeHtml(record.weightBefore) || '--'} kg</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">透后体重</span>
+                <span class="record-detail-value">${escapeHtml(record.weightAfter) || '--'} kg</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">脱水量</span>
+                <span class="record-detail-value">${escapeHtml(record.actualUF) || '--'} ml</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">床位</span>
+                <span class="record-detail-value">${escapeHtml(record.bed) || '--'}</span>
+            </div>
+        `;
+        if (record.heating && record.heating.length > 0) {
+            detailsHtml += `
+                <div class="record-detail">
+                    <span class="record-detail-label">烤电</span>
+                    <span class="record-detail-value">${escapeHtml(record.heating.join('、'))}</span>
+                </div>
+            `;
+        }
+    } else {
+        detailsHtml = `
+            <div class="record-detail">
+                <span class="record-detail-label">灌入量</span>
+                <span class="record-detail-value">${escapeHtml(record.inflow) || '--'} ml</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">排出量</span>
+                <span class="record-detail-value">${escapeHtml(record.outflow) || '--'} ml</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">浓度</span>
+                <span class="record-detail-value">${escapeHtml(record.concentration) || '--'}</span>
+            </div>
+            <div class="record-detail">
+                <span class="record-detail-label">留腹时间</span>
+                <span class="record-detail-value">${escapeHtml(record.dwellTime) || '--'}</span>
+            </div>
+        `;
+    }
+    return detailsHtml;
+}
+
+// 显示Toast提示
+function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2000);
+}
+
+// 编辑记录
+function editRecord(id) {
+    const records = getRecords();
+    const record = records.find(r => r.id === id);
+    
+    if (!record) {
+        showToast('记录不存在');
+        return;
+    }
+    
+    // 设置编辑状态
+    editingRecordId = id;
+    
+    if (record.type === 'hd') {
+        // 填充血液透析表单
+        // 日期格式处理：确保日期只包含日期部分（YYYY-MM-DD）
+        const dateValue = record.date ? record.date.split('T')[0] : '';
+        document.getElementById('hd-date').value = dateValue;
+        document.getElementById('hd-shift').value = record.shift || '';
+        
+        // 先填充时间值，再根据班次类型决定是否调用 onShiftChange
+        document.getElementById('hd-start-time').value = record.startTime || '';
+        document.getElementById('hd-end-time').value = record.endTime || '';
+        
+        // 根据班次类型决定时间输入框的显示状态
+        const timeRow = document.getElementById('hd-time-row');
+        const startTimeInput = document.getElementById('hd-start-time');
+        const endTimeInput = document.getElementById('hd-end-time');
+        const selectedShift = record.shift || '';
+        
+        if (selectedShift === 'custom') {
+            timeRow.style.display = 'grid';
+            startTimeInput.required = true;
+            endTimeInput.required = true;
+        } else if (SHIFT_TIMES[selectedShift]) {
+            timeRow.style.display = 'none';
+            startTimeInput.required = false;
+            endTimeInput.required = false;
+        } else {
+            timeRow.style.display = 'none';
+            startTimeInput.required = false;
+            endTimeInput.required = false;
+        }
+        document.getElementById('hd-mode').value = record.mode || 'normal';
+        document.getElementById('hd-bed').value = record.bed || '';
+        document.getElementById('hd-weight-before').value = record.weightBefore || '';
+        document.getElementById('hd-weight-after').value = record.weightAfter || '';
+        document.getElementById('hd-target-uf').value = record.targetUF || '';
+        document.getElementById('hd-actual-uf').value = record.actualUF || '';
+        document.getElementById('hd-bp-before').value = record.bpBefore || '';
+        document.getElementById('hd-bp-after').value = record.bpAfter || '';
+        document.getElementById('hd-heating-duration').value = record.heatingDuration || '';
+        document.getElementById('hd-notes').value = record.notes || '';
+        
+        // 设置烤电选项
+        document.querySelectorAll('input[name="hd-heating"]').forEach(cb => {
+            cb.checked = (record.heating || []).includes(cb.value);
+        });
+        
+        // 设置不良反应选项
+        document.querySelectorAll('input[name="hd-reaction"]').forEach(cb => {
+            cb.checked = (record.reactions || []).includes(cb.value);
+        });
+        
+        // 更新标题
+        updateFormTitle('hd', '编辑血液透析记录');
+        
+        showPage('page-record-hd');
+    } else if (record.type === 'pd') {
+        // 填充腹膜透析表单
+        // 日期格式处理：确保日期只包含日期部分（YYYY-MM-DD）
+        const dateValue = record.date ? record.date.split('T')[0] : '';
+        document.getElementById('pd-date').value = dateValue;
+        document.getElementById('pd-concentration').value = record.concentration || '';
+        document.getElementById('pd-inflow').value = record.inflow || '';
+        document.getElementById('pd-outflow').value = record.outflow || '';
+        document.getElementById('pd-dwell-time').value = record.dwellTime || '';
+        document.getElementById('pd-fluid-appearance').value = record.fluidAppearance || '';
+        document.getElementById('pd-weight').value = record.weight || '';
+        document.getElementById('pd-bp').value = record.bp || '';
+        document.getElementById('pd-notes').value = record.notes || '';
+        
+        // 设置不良反应选项
+        document.querySelectorAll('input[name="pd-reaction"]').forEach(cb => {
+            cb.checked = (record.reactions || []).includes(cb.value);
+        });
+        
+        // 更新标题
+        updateFormTitle('pd', '编辑腹膜透析记录');
+        
+        showPage('page-record-pd');
+    }
+}
+
+// 查看记录详情
+function viewRecordDetail(id) {
+    // 点击记录项时跳转到编辑
+    editRecord(id);
+}
+
+// ==================== 初始化 ====================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化主题
+    initTheme();
+    
+    initForms();
+    loadHomePage();
+    
+    // 绑定删除确认按钮事件
+    document.getElementById('confirm-delete-btn').addEventListener('click', confirmDelete);
+    
+    // 点击模态框背景关闭
+    document.getElementById('delete-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeDeleteModal();
+        }
+    });
+    
+    // 监听系统主题变化
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            const settings = getSettings();
+            if (settings.theme === 'auto') {
+                // 自动模式下，跟随系统变化
+                applyTheme('auto');
+            }
+        });
+    }
+    
+    // 监听网络状态变化
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    // 初始化网络状态显示
+    updateOnlineStatus();
+});
+
+// ==================== 网络状态管理 ====================
+
+let isOnline = navigator.onLine;
+
+function updateOnlineStatus() {
+    const wasOffline = !isOnline;
+    isOnline = navigator.onLine;
+    
+    if (isOnline) {
+        if (wasOffline) {
+            showToast('网络已恢复，数据已自动同步');
+            triggerBackgroundSync();
+        }
+    } else {
+        showToast('当前处于离线状态，数据将保存在本地');
+    }
+}
+
+function triggerBackgroundSync() {
+    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+        navigator.serviceWorker.ready.then((registration) => {
+            return registration.sync.register('sync-records');
+        }).catch(() => {
+        });
+    }
+}
+
+// Service Worker 消息监听
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'SW_UPDATED') {
+            if (confirm('应用已更新到最新版本，是否刷新页面以获取最新内容？')) {
+                window.location.reload();
+            }
+        }
+    });
+}
+
+// ==================== 透析提醒功能 ====================
+
+const REMINDER_KEY = 'dialysis_reminder';
+
+// 获取提醒设置
+function getReminderSettings() {
+    const data = localStorage.getItem(REMINDER_KEY);
+    return data ? JSON.parse(data) : {
+        enabled: false,
+        days: [],
+        time: '06:00',
+        advance: 0
+    };
+}
+
+// 保存提醒设置
+function saveReminderSettings(settings) {
+    // 确保time字段有值
+    if (!settings.time) {
+        settings.time = '06:00';
+    }
+    localStorage.setItem(REMINDER_KEY, JSON.stringify(settings));
+}
+
+// 切换提醒设置显示
+function toggleReminderSettings() {
+    const checkbox = document.getElementById('reminder-enabled');
+    const options = document.getElementById('reminder-options');
+    
+    if (!checkbox || !options) return;
+    
+    if (checkbox.checked) {
+        options.style.display = 'block';
+        requestNotificationPermission();
+    } else {
+        options.style.display = 'none';
+    }
+    
+    saveReminderFromForm();
+}
+
+// 请求通知权限
+function requestNotificationPermission() {
+    if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                scheduleReminder();
+            } else if (permission === 'denied') {
+                showToast('请允许通知权限以接收提醒');
+                document.getElementById('reminder-enabled').checked = false;
+                document.getElementById('reminder-options').style.display = 'none';
+            }
+        });
+    } else {
+        showToast('您的浏览器不支持通知功能');
+        document.getElementById('reminder-enabled').checked = false;
+        document.getElementById('reminder-options').style.display = 'none';
+    }
+}
+
+// 从表单保存提醒设置
+function saveReminderFromForm() {
+    const settings = {
+        enabled: document.getElementById('reminder-enabled').checked,
+        days: [],
+        time: document.getElementById('reminder-time').value,
+        advance: parseInt(document.getElementById('reminder-advance').value)
+    };
+    
+    // 获取选中的日期
+    document.querySelectorAll('input[name="reminder-day"]:checked').forEach(cb => {
+        settings.days.push(parseInt(cb.value));
+    });
+    
+    saveReminderSettings(settings);
+    
+    if (settings.enabled) {
+        scheduleReminder();
+    }
+}
+
+// 保存提醒设置按钮（带提示）
+function saveReminderSettingsBtn() {
+    saveReminderFromForm();
+    showToast('提醒设置已保存');
+}
+
+// 加载提醒设置到表单
+function loadReminderSettings() {
+    const enabledEl = document.getElementById('reminder-enabled');
+    const timeEl = document.getElementById('reminder-time');
+    const advanceEl = document.getElementById('reminder-advance');
+    const optionsEl = document.getElementById('reminder-options');
+    
+    if (!enabledEl || !timeEl || !advanceEl || !optionsEl) return;
+    
+    const settings = getReminderSettings();
+    
+    enabledEl.checked = settings.enabled;
+    timeEl.value = settings.time || '06:00';
+    advanceEl.value = settings.advance || 0;
+    
+    // 设置选中的日期
+    document.querySelectorAll('input[name="reminder-day"]').forEach(cb => {
+        cb.checked = settings.days.includes(parseInt(cb.value));
+    });
+    
+    // 显示/隐藏选项区域
+    optionsEl.style.display = settings.enabled ? 'block' : 'none';
+}
+
+// 提醒定时器ID（用于清除旧的定时器）
+let reminderIntervalId = null;
+
+// 安排提醒
+function scheduleReminder() {
+    const settings = getReminderSettings();
+    
+    // 清除旧的定时器，避免内存泄漏
+    if (reminderIntervalId !== null) {
+        clearInterval(reminderIntervalId);
+        reminderIntervalId = null;
+    }
+    
+    if (!settings.enabled || settings.days.length === 0) {
+        return;
+    }
+    
+    // 检查通知权限
+    if ('Notification' in window && Notification.permission === 'granted') {
+        // 使用 setInterval 每分钟检查一次
+        checkAndNotify();
+        reminderIntervalId = setInterval(checkAndNotify, 60000);
+    }
+}
+
+// 检查并发送通知
+function checkAndNotify() {
+    const settings = getReminderSettings();
+    
+    if (!settings.enabled) return;
+    if (!settings.time || !settings.time.includes(':')) return;
+    
+    const now = new Date();
+    const currentDay = now.getDay();
+    
+    // 检查今天是否需要提醒
+    if (!settings.days.includes(currentDay)) return;
+    
+    // 解析提醒时间
+    const [hours, minutes] = settings.time.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return;
+    
+    const reminderTime = new Date(now);
+    reminderTime.setHours(hours, minutes, 0, 0);
+    
+    // 减去提前时间
+    reminderTime.setMinutes(reminderTime.getMinutes() - settings.advance);
+    
+    // 检查是否到了提醒时间（误差1分钟内）
+    const diff = Math.abs(now.getTime() - reminderTime.getTime());
+    if (diff < 60000) {
+        sendNotification();
+    }
+}
+
+// 发送通知
+function sendNotification() {
+    if ('Notification' in window && Notification.permission === 'granted') {
+        const settings = getSettings();
+        const dialysisType = settings.dialysisType === 'hd' ? '血液透析' : '腹膜透析';
+        
+        new Notification('透析提醒', {
+            body: `今天是透析日，请记得进行${dialysisType}记录`,
+            icon: './icons/icon.svg',
+            tag: 'dialysis-reminder',
+            requireInteraction: true
+        });
+    }
+}
+
+// 测试通知
+function testReminder() {
+    if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+            new Notification('测试通知', {
+                body: '透析提醒功能正常工作！',
+                icon: './icons/icon.svg',
+                tag: 'test-reminder'
+            });
+            showToast('测试通知已发送');
+        } else if (Notification.permission === 'denied') {
+            showToast('通知权限被拒绝，请在浏览器设置中允许通知');
+        } else {
+            requestNotificationPermission();
+        }
+    } else {
+        showToast('您的浏览器不支持通知功能');
+    }
+}
