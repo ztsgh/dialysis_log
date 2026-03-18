@@ -78,13 +78,30 @@ demo/
 ├── start-server.bat   # Windows 启动脚本
 ├── PWA-INSTALL.md     # PWA 安装说明
 ├── README.md          # 开发文档
+├── AGENTS.md          # AI 开发指南
 ├── css/
 │   └── style.css      # 样式文件（含CSS变量、深色模式）
 ├── js/
-│   └── app.js         # 应用主逻辑（记录管理、表单、导入导出等）
+│   ├── app.js         # 应用主逻辑（页面导航、初始化）
+│   ├── constants.js   # 常量配置（班次、透析方式等）
+│   ├── data.js        # 数据层（CRUD操作）
+│   ├── chart.min.js   # Chart.js 图表库（本地化）
+│   ├── components/
+│   │   ├── theme.js         # 主题管理
+│   │   ├── note-templates.js # 备注模板
+│   │   └── forms.js         # 表单处理、验证
+│   ├── utils/
+│   │   ├── helpers.js       # 工具函数（日期解析、数值验证等）
+│   │   ├── validate.js      # 数据验证
+│   │   └── import-export.js # 导入导出
+│   └── pages/
+│       ├── home.js          # 首页（日历/列表视图）
+│       ├── history.js       # 历史记录
+│       ├── stats.js         # 统计页（Chart.js图表）
+│       └── settings.js      # 设置页
 └── icons/
     ├── icon.svg       # SVG 图标源文件
-    ├── generate-icons.py  # 图标生成脚本（生成多尺寸PWA图标）
+    ├── generate-icons.py  # 图标生成脚本
     └── README.md      # 图标生成说明
 ```
 
@@ -125,91 +142,102 @@ serve -p 8080
 
 ## 核心模块说明
 
-### 1. 数据管理模块 ([`js/app.js`](js/app.js))
+### 1. 数据管理模块 ([`js/data.js`](js/data.js))
 ```javascript
 // 数据存储键名
 const DATA_KEY = 'dialysis_records';
 const SETTINGS_KEY = 'dialysis_settings';
 
-// 主要数据操作函数
-function getRecords()           // 获取所有记录
-function addRecord(record)      // 添加新记录（自动生成ID、创建时间）
-function updateRecord(id, data) // 更新记录（更新updatedAt字段）
-function deleteRecord(id)       // 删除记录（二次确认）
-function getSettings()          // 获取设置（含深色模式、自定义配置）
-function saveSettingsToStorage(settings) // 保存设置
-function clearAllRecords()      // 清空所有记录（二次确认）
+// 主要数据操作函数（通过 Data 命名空间访问）
+Data.getRecords()           // 获取所有记录（带缓存）
+Data.addRecord(record)      // 添加新记录（自动生成ID、创建时间）
+Data.updateRecord(id, data) // 更新记录（更新updatedAt字段）
+Data.deleteRecord(id)       // 删除记录
+Data.getSettings()          // 获取设置（含深色模式、自定义配置）
+Data.saveSettings(settings) // 保存设置
+Data.clearAllRecords()      // 清空所有记录
 ```
 
-### 2. 页面导航模块
+### 2. 页面导航模块 ([`js/app.js`](js/app.js))
 ```javascript
 function showPage(pageId)       // 切换页面（首页/记录页/历史页/统计页/设置页）
 function loadHomePage()         // 加载首页（概览、快速新增入口）
-function loadRecordPage()       // 加载透析记录页（血液/腹膜标签切换）
 function loadHistoryPage()      // 加载历史记录页（筛选、列表展示）
 function loadStatsPage()        // 加载统计页（图表、数据指标）
 function loadSettingsPage()     // 加载设置页（深色模式、数据清理）
 ```
 
-### 3. 表单处理模块
+### 3. 表单处理模块 ([`js/components/forms.js`](js/components/forms.js))
 ```javascript
-// 班次配置（支持自定义扩展）
+// 班次配置（在 constants.js 中定义）
 const SHIFT_TIMES = {
     morning: { start: '06:30', end: '10:30', label: '早班' },
     midday: { start: '11:30', end: '15:30', label: '中班' },
-    evening: { start: '16:30', end: '20:30', label: '晚班' },
-    custom: { start: '', end: '', label: '自定义' }
+    evening: { start: '16:30', end: '20:30', label: '晚班' }
 };
 
-function onShiftChange()        // 班次选择联动时间展示
-function initForms()            // 初始化血液/腹膜透析表单
-function editRecord(id)         // 编辑记录（回显表单数据）
-function validateForm(formData) // 表单数据校验（导入/新增/编辑）
+Forms.submitHD()               // 提交血液透析表单（含验证）
+Forms.submitPD()               // 提交腹膜透析表单（含验证）
+function onShiftChange()       // 班次选择联动时间展示
+function initForms()           // 初始化血液/腹膜透析表单
+function editRecord(id)        // 编辑记录（回显表单数据）
 ```
 
-### 4. 数据导入导出模块
+### 4. 工具函数模块 ([`js/utils/helpers.js`](js/utils/helpers.js))
 ```javascript
-function exportData(format)     // 导出数据（CSV/JSON），自动命名文件
+// 日期处理
+Helpers.parseDate(dateStr)     // 安全解析日期（避免时区问题）
+Helpers.getTodayStr()          // 获取今天日期字符串
+Helpers.formatDate(dateStr)    // 格式化日期显示
+
+// 数值处理
+Helpers.safeParseFloat(value, defaultValue)  // 安全解析浮点数
+Helpers.safeParseInt(value, defaultValue)    // 安全解析整数
+Helpers.isValidNumber(value)                 // 检查是否为有效数值
+
+// 其他工具
+Helpers.escapeHtml(text)       // HTML转义（防XSS）
+Helpers.getShiftLabel(shift)   // 获取班次标签
+Helpers.createRecordItem(record, options)  // 创建记录项HTML
+```
+
+### 5. 数据导入导出模块 ([`js/app.js`](js/app.js))
+```javascript
+function exportData()           // 导出数据（CSV格式），自动命名文件
 function importData(input)      // 导入数据，自动识别格式
 function importFromJSON(content) // 解析JSON，校验字段完整性
 function importFromCSV(content)  // 解析CSV，映射字段关系
-function showImportError(msg)   // 显示导入错误提示
 ```
 
-### 5. Service Worker 模块 ([`sw.js`](sw.js))
+### 6. Service Worker 模块 ([`sw.js`](sw.js))
 ```javascript
 // 缓存策略
-const CACHE_NAME = 'dialysis-diary-v2';
+const CACHE_NAME = 'dialysis-diary-v4';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './css/style.css',
     './js/app.js',
+    './js/chart.min.js',
     './manifest.json',
     './icons/icon.svg'
 ];
 
 // 主要事件处理
-self.addEventListener('install')   // 安装事件 - 缓存核心资源（保障离线访问）
-self.addEventListener('activate')  // 激活事件 - 清理旧缓存（缓存管理）
+self.addEventListener('install')   // 安装事件 - 缓存核心资源
+self.addEventListener('activate')  // 激活事件 - 清理旧缓存
 self.addEventListener('fetch')     // 请求拦截 - 缓存优先策略
 self.addEventListener('sync')      // 后台同步（离线操作同步）
-self.addEventListener('message')   // 消息通信（与主线程交互）
 ```
 
-### 6. 提醒功能模块
+### 7. 统计图表模块 ([`js/pages/stats.js`](js/pages/stats.js))
 ```javascript
-// 提醒设置存储
-const REMINDER_KEY = 'dialysis_reminder';
-
-// 主要函数
-function getReminderSettings()        // 获取提醒设置
-function saveReminderSettings()       // 保存提醒设置
-function requestNotificationPermission() // 请求通知权限
-function scheduleReminder()           // 安排提醒检查
-function checkAndNotify()             // 检查并发送通知
-function sendNotification()           // 发送系统通知
-function testReminder()               // 测试通知功能
+StatsPage.load()               // 加载统计页
+StatsPage.renderWeightChart()  // 体重趋势图
+StatsPage.renderUFChart()      // 脱水量趋势图
+StatsPage.renderBPChart()      // 血压趋势图
+StatsPage.renderUFRChart()     // 超滤率分析图
+StatsPage.destroyAllCharts()   // 销毁所有图表实例
 ```
 
 ## 数据结构
@@ -408,9 +436,9 @@ const SHIFT_TIMES = {
 ### 更新缓存版本
 修改 [`sw.js`](sw.js:6) 中的缓存名称，确保缓存更新策略：
 ```javascript
-const CACHE_NAME = 'dialysis-diary-v2'; // 当前版本 v2
+const CACHE_NAME = 'dialysis-diary-v4'; // 当前版本 v4
 ```
-版本更新时修改版本号（如 v3、v4），Service Worker 会在激活时自动清理旧缓存。
+版本更新时修改版本号，Service Worker 会在激活时自动清理旧缓存。
 
 ### 核心流程验证
 开发完成后需验证核心流程完整性：
@@ -486,6 +514,20 @@ const CACHE_NAME = 'dialysis-diary-v2'; // 当前版本 v2
 4. 检查数值字段（体重、脱水量等）是否为合法格式
 
 ## 更新日志
+
+### v2.2.0
+- **代码重构优化**：
+  - 修复重复保存逻辑，统一使用 `Forms.submitHD/PD()`
+  - 提取公共函数 `createRecordItem()` 和 `getShiftLabel()` 到 `helpers.js`
+  - 同步 `constants.js` 中 `HEATING_OPTIONS` 与 HTML 实际选项
+- **日期处理优化**：统一 `parseDate()` 函数，避免时区问题
+- **数值安全化**：添加 `safeParseFloat()`、`safeParseInt()`、`isValidNumber()` 函数
+- **图表管理优化**：添加 `destroyAllCharts()` 函数，页面切换时销毁图表实例
+
+### v2.1.0
+- **日历布局修复**：解决小屏手机日历溢出问题，从 CSS Grid 改为 Flexbox 布局
+- **Service Worker 优化**：修复 `fetchAndCache` 网络错误处理，跳过非同源请求
+- **缓存版本升级**：从 v3 升级到 v4，确保缓存正确更新
 
 ### v2.0.0
 - **深色模式增强**：新增手动切换按钮，支持自动/浅色/深色三种模式

@@ -6,16 +6,6 @@
 // 编辑状态（全局）
 let editingRecordId = null;
 
-// 班次标签辅助函数
-function getShiftLabel(shiftValue) {
-    if (!shiftValue) return '';
-    if (shiftValue === 'morning') return '早班';
-    if (shiftValue === 'midday') return '中班';
-    if (shiftValue === 'evening') return '晚班';
-    if (shiftValue === 'custom') return '自定义';
-    return '';
-}
-
 // ==================== 页面导航 ====================
 
 function showPage(pageId) {
@@ -57,6 +47,14 @@ function showPage(pageId) {
         
         if (navMap[pageId] !== undefined) {
             document.querySelectorAll('.nav-item')[navMap[pageId]].classList.add('active');
+        }
+        
+        // 离开统计页时销毁图表实例
+        const currentPage = document.querySelector('.page.active');
+        if (currentPage && currentPage.id === 'page-stats' && pageId !== 'page-stats') {
+            if (window.StatsPage && StatsPage.destroyAllCharts) {
+                StatsPage.destroyAllCharts();
+            }
         }
         
         // 根据页面加载数据
@@ -478,118 +476,14 @@ function showToast(message) {
     }, 2000);
 }
 
-// 保存血液透析记录
+// 保存血液透析记录 - 委托给forms.js中带验证的版本
 function saveHDRecord() {
-    const shift = document.getElementById('hd-shift').value;
-    if (!shift) { showToast('请选择透析班次'); return; }
-    
-    const date = document.getElementById('hd-date').value;
-    if (!date) { showToast('请选择透析日期'); return; }
-    
-    const weightBefore = document.getElementById('hd-weight-before').value;
-    const weightAfter = document.getElementById('hd-weight-after').value;
-    if (!weightBefore || !weightAfter) { showToast('请填写体重'); return; }
-    
-    const bpBefore = document.getElementById('hd-bp-before').value;
-    const bpAfter = document.getElementById('hd-bp-after').value;
-    
-    // 生成班次标签
-    let shiftLabel = '';
-    if (shift === 'custom') shiftLabel = '自定义';
-    else if (CONSTANTS.SHIFT_TIMES[shift]) shiftLabel = CONSTANTS.SHIFT_TIMES[shift].label;
-    
-    // 获取烤电和不良反应
-    const heating = [];
-    document.querySelectorAll('input[name="hd-heating"]:checked').forEach(cb => heating.push(cb.value));
-    
-    const reactions = [];
-    document.querySelectorAll('input[name="hd-reaction"]:checked').forEach(cb => reactions.push(cb.value));
-    
-    const record = {
-        type: 'hd',
-        date: date,
-        shift: shift,
-        shiftLabel: shiftLabel,
-        startTime: document.getElementById('hd-start-time').value || '',
-        endTime: document.getElementById('hd-end-time').value || '',
-        mode: document.getElementById('hd-mode').value || 'normal',
-        bed: document.getElementById('hd-bed').value || '',
-        weightBefore: weightBefore,
-        weightAfter: weightAfter,
-        targetUF: document.getElementById('hd-target-uf').value || '',
-        actualUF: document.getElementById('hd-actual-uf').value || '',
-        bpBefore: bpBefore || '',
-        bpAfter: bpAfter || '',
-        heating: heating,
-        heatingDuration: document.getElementById('hd-heating-duration').value || '',
-        reactions: reactions,
-        notes: document.getElementById('hd-notes').value || ''
-    };
-    
-    if (window.editingRecordId) {
-        Data.updateRecord(window.editingRecordId, record);
-        showToast('记录已更新');
-        window.editingRecordId = null;
-    } else {
-        Data.addRecord(record);
-        showToast('血液透析记录已保存');
-    }
-    
-    // 重置表单
-    document.getElementById('form-hd').reset();
-    initForms();
-    showPage('page-home');
+    Forms.submitHD();
 }
 
-// 保存腹膜透析记录
+// 保存腹膜透析记录 - 委托给forms.js中带验证的版本
 function savePDRecord() {
-    const date = document.getElementById('pd-date').value;
-    if (!date) { showToast('请选择透析日期'); return; }
-    
-    const concentration = document.getElementById('pd-concentration').value;
-    if (!concentration) { showToast('请选择透析液浓度'); return; }
-    
-    const inflow = document.getElementById('pd-inflow').value;
-    const outflow = document.getElementById('pd-outflow').value;
-    if (!inflow || !outflow) { showToast('请填写灌入量和排出量'); return; }
-    
-    const dwellTime = document.getElementById('pd-dwell-time').value;
-    if (!dwellTime) { showToast('请填写留腹时间'); return; }
-    
-    const weight = document.getElementById('pd-weight').value;
-    const bp = document.getElementById('pd-bp').value;
-    
-    // 获取不良反应
-    const reactions = [];
-    document.querySelectorAll('input[name="pd-reaction"]:checked').forEach(cb => reactions.push(cb.value));
-    
-    const record = {
-        type: 'pd',
-        date: date,
-        concentration: concentration,
-        inflow: inflow,
-        outflow: outflow,
-        dwellTime: dwellTime,
-        fluidAppearance: document.getElementById('pd-fluid-appearance').value || '',
-        weight: weight || '',
-        bp: bp || '',
-        reactions: reactions,
-        notes: document.getElementById('pd-notes').value || ''
-    };
-    
-    if (window.editingRecordId) {
-        Data.updateRecord(window.editingRecordId, record);
-        showToast('记录已更新');
-        window.editingRecordId = null;
-    } else {
-        Data.addRecord(record);
-        showToast('腹膜透析记录已保存');
-    }
-    
-    // 重置表单
-    document.getElementById('form-pd').reset();
-    initForms();
-    showPage('page-home');
+    Forms.submitPD();
 }
 
 // 编辑记录

@@ -190,8 +190,8 @@ function saveRecords(records) {
 ### Service Worker
 
 - 缓存策略：Cache First
-- 缓存版本：`dialysis-diary-v2`
-- 缓存资源：`index.html`, `css/style.css`, `js/app.js`, `manifest.json`, 图标文件
+- 缓存版本：`dialysis-diary-v4`
+- 缓存资源：`index.html`, `css/style.css`, `js/app.js`, `js/chart.min.js`, `manifest.json`, `icons/icon.svg`
 
 ## 代码审查清单
 
@@ -205,6 +205,47 @@ function saveRecords(records) {
 ## 开发日记
 
 ### 2026年
+
+#### Phase 7: 代码重构与优化
+
+##### 重复保存逻辑修复
+- 问题：`app.js` 中的 `saveHDRecord()` 和 `savePDRecord()` 与 `forms.js` 存在重复逻辑
+- 解决方案：
+  - `app.js` 中的保存函数改为委托给 `Forms.submitHD()` 和 `Forms.submitPD()`
+  - 统一使用 `forms.js` 中带验证的保存逻辑
+
+##### 公共函数提取
+- 问题：`createRecordItem()` 和 `getShiftLabel()` 在 `home.js` 和 `history.js` 中重复定义
+- 解决方案：
+  - 将 `createRecordItem()` 提取到 `helpers.js`
+  - 将 `getShiftLabel()` 提取到 `helpers.js`
+  - 两个页面模块统一调用 `Helpers.createRecordItem()` 和 `Helpers.getShiftLabel()`
+
+##### 常量配置同步
+- 问题：`constants.js` 中的 `HEATING_OPTIONS` 与 HTML 表单实际选项不一致
+- 解决方案：
+  - 更新 `HEATING_OPTIONS` 为 `['红外线照射', '中频理疗', '低频理疗', '超短波治疗', '其他']`
+  - 同步更新 `HD_REACTIONS` 和 `PD_REACTIONS`
+
+##### 统一日期处理函数
+- 问题：日期解析使用 `new Date(dateStr)` 可能导致时区问题
+- 解决方案：
+  - 在 `helpers.js` 添加 `parseDate()` 函数，使用本地时区解析
+  - 更新 `home.js`、`history.js`、`stats.js` 使用 `Helpers.parseDate()`
+
+##### 数值解析安全化
+- 问题：`parseFloat()` 和 `parseInt()` 可能返回 NaN 导致计算错误
+- 解决方案：
+  - 添加 `safeParseFloat(value, defaultValue)` 函数
+  - 添加 `safeParseInt(value, defaultValue)` 函数
+  - 添加 `isValidNumber(value)` 函数
+  - 更新 `stats.js` 中所有数值解析使用安全函数
+
+##### 图表实例管理优化
+- 问题：页面切换时图表实例未销毁，可能导致内存泄漏
+- 解决方案：
+  - 在 `stats.js` 添加 `destroyAllCharts()` 函数
+  - 在 `app.js` 的 `showPage()` 中，离开统计页时调用销毁函数
 
 #### Phase 6: Bug 修复与稳定性优化
 
@@ -247,6 +288,22 @@ function saveRecords(records) {
 ##### 记录显示优化
 - 班次标签为空时根据班次值自动转换显示
 - 日历视图使用可靠的日期解析方法
+
+##### 日历布局溢出修复
+- 问题：小屏手机日历内容宽度超出容器，导致横向溢出
+- 根本原因：CSS Grid 的 `gap` 属性不受 `box-sizing: border-box` 控制
+- 解决方案：将日历布局从 CSS Grid 改为 Flexbox
+  - `.calendar-weekdays` 和 `.calendar-days` 使用 `display: flex; flex-wrap: wrap;`
+  - 每个单元格宽度精确为 `calc(100% / 7)` (14.2857%)
+  - 移除 `gap` 属性，避免溢出问题
+
+##### Service Worker 错误修复
+- 问题：`fetchAndCache` 函数在网络请求失败时抛出 `TypeError: Failed to fetch`
+- 解决方案：
+  - 添加 `.catch()` 错误处理，记录警告而非抛出错误
+  - 跳过非同源请求（如 CDN 资源）
+  - 缓存操作失败时只记录警告，不中断流程
+  - 缓存版本从 `v3` 升级到 `v4`
 
 ### 2024年
 
@@ -300,5 +357,5 @@ function saveRecords(records) {
 - 颜色对比度增强：文字颜色加深，边框加粗
 
 ### 待完成
-- [ ] 日历在小屏手机排版优化（低优先级）
+- [x] 日历在小屏手机排版优化（已完成）
 - [ ] Chart.js 本地化（CDN 访问不稳定时）

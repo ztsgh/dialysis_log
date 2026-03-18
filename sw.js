@@ -3,12 +3,25 @@
  * 支持离线缓存和后台同步
  */
 
-const CACHE_NAME = 'dialysis-diary-v2';
+const CACHE_NAME = 'dialysis-diary-v10';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './css/style.css',
     './js/app.js',
+    './js/chart.min.js',
+    './js/constants.js',
+    './js/data.js',
+    './js/utils/helpers.js',
+    './js/utils/validate.js',
+    './js/utils/import-export.js',
+    './js/components/theme.js',
+    './js/components/note-templates.js',
+    './js/components/forms.js',
+    './js/pages/home.js',
+    './js/pages/history.js',
+    './js/pages/stats.js',
+    './js/pages/settings.js',
     './manifest.json',
     './icons/icon.svg'
 ];
@@ -79,19 +92,20 @@ self.addEventListener('fetch', (event) => {
             .then((cachedResponse) => {
                 // 如果有缓存，返回缓存
                 if (cachedResponse) {
-                    // 同时在后台更新缓存
-                    fetchAndCache(event.request);
+                    // 同时在后台更新缓存（忽略错误）
+                    fetchAndCache(event.request).catch(() => {});
                     return cachedResponse;
                 }
 
                 // 没有缓存，从网络获取
-                return fetchAndCache(event.request);
-            })
-            .catch(() => {
-                // 网络失败且没有缓存，返回离线页面
-                if (event.request.mode === 'navigate') {
-                    return caches.match('./index.html');
-                }
+                return fetchAndCache(event.request)
+                    .catch(() => {
+                        // 网络失败且没有缓存，返回离线页面
+                        if (event.request.mode === 'navigate') {
+                            return caches.match('./index.html');
+                        }
+                        return new Response('', { status: 503, statusText: 'Service Unavailable' });
+                    });
             })
     );
 });
@@ -110,6 +124,11 @@ function fetchAndCache(request) {
                 return response;
             }
 
+            // 跳过非同源请求（如 CDN）
+            if (!request.url.startsWith(self.location.origin)) {
+                return response;
+            }
+
             // 克隆响应（因为响应是流，只能使用一次）
             const responseToCache = response.clone();
 
@@ -117,9 +136,16 @@ function fetchAndCache(request) {
             caches.open(CACHE_NAME)
                 .then((cache) => {
                     cache.put(request, responseToCache);
+                })
+                .catch((err) => {
+                    console.warn('[ServiceWorker] 缓存失败:', err);
                 });
 
             return response;
+        })
+        .catch((err) => {
+            console.warn('[ServiceWorker] 获取资源失败:', request.url);
+            return null; // 返回 null 而不是抛出错误
         });
 }
 

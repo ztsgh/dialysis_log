@@ -37,7 +37,7 @@ const Forms = (function() {
     function init() {
         window.editingRecordId = null;
         
-        const today = new Date(new Date().getTime() + new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        const today = Helpers.getTodayStr();
         document.getElementById('hd-date').value = today;
         document.getElementById('pd-date').value = today;
         
@@ -175,7 +175,7 @@ const Forms = (function() {
 
     // 提交腹膜透析表单
     function submitPD(e) {
-        e.preventDefault();
+        if (e) e.preventDefault();
         
         const date = document.getElementById('pd-date').value;
         const concentration = document.getElementById('pd-concentration').value;
@@ -234,7 +234,7 @@ const Forms = (function() {
             showToast('腹膜透析记录已保存');
         }
         
-        e.target.reset();
+        document.getElementById('form-pd').reset();
         init();
         showPage('page-home');
     }
@@ -250,7 +250,8 @@ const Forms = (function() {
         init,
         updateTitle,
         bindEvents,
-        submitHD
+        submitHD,
+        submitPD
     };
 })();
 

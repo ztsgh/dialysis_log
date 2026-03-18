@@ -12,18 +12,21 @@ const StatsPage = (function() {
 
     function load() {
         loadAttempts++;
-        if (typeof Chart === 'undefined') {
-            if (loadAttempts < 50) {
+        if (typeof Chart === 'undefined' || Chart === null) {
+            if (loadAttempts < 10) {
                 setTimeout(load, 100);
             } else {
-                document.getElementById('stats-total').textContent = Data.getRecords().length;
-                showToast('图表加载失败，请检查网络连接');
+                // Chart.js 不可用，只显示统计数字
+                renderStatsOnly();
             }
             return;
         }
         
         loadAttempts = 0;
-        
+        renderStatsOnly();
+    }
+    
+    function renderStatsOnly() {
         const records = Data.getRecords();
         
         const hdRecords = records.filter(r => r.type === 'hd');
@@ -34,39 +37,46 @@ const StatsPage = (function() {
         document.getElementById('stats-pd').textContent = pdRecords.length;
         
         if (hdRecords.length > 0) {
-            const weights = hdRecords.filter(r => r.weightBefore).map(r => parseFloat(r.weightBefore));
-            const ufs = hdRecords.filter(r => r.actualUF).map(r => parseFloat(r.actualUF));
+            const weights = hdRecords
+                .filter(r => Helpers.isValidNumber(r.weightBefore))
+                .map(r => Helpers.safeParseFloat(r.weightBefore));
             
             if (weights.length > 0) {
                 document.getElementById('stats-avg-weight').textContent = (weights.reduce((a, b) => a + b, 0) / weights.length).toFixed(1);
             }
             
-            if (ufs.length > 0) {
-                document.getElementById('stats-avg-uf').textContent = Math.round(ufs.reduce((a, b) => a + b, 0) / ufs.length);
+            // 计算脱水量：优先实际 > 目标 > 体重差值（kg转ml）
+            const ufValues = hdRecords.map(r => {
+                if (Helpers.isValidNumber(r.actualUF)) return Helpers.safeParseFloat(r.actualUF);
+                if (Helpers.isValidNumber(r.targetUF)) return Helpers.safeParseFloat(r.targetUF);
+                if (Helpers.isValidNumber(r.weightBefore) && Helpers.isValidNumber(r.weightAfter)) {
+                    const weightDiff = Helpers.safeParseFloat(r.weightBefore) - Helpers.safeParseFloat(r.weightAfter);
+                    return weightDiff > 0 ? Math.round(weightDiff * 1000) : 0;
+                }
+                return 0;
+            }).filter(v => v > 0);
+            
+            if (ufValues.length > 0) {
+                document.getElementById('stats-avg-uf').textContent = Math.round(ufValues.reduce((a, b) => a + b, 0) / ufValues.length);
             }
         }
         
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const recentRecords = records.filter(r => {
-            const parts = r.date.split('-');
-            const recordDate = new Date(parts[0], parts[1] - 1, parts[2]);
-            return recordDate >= thirtyDaysAgo;
+            const recordDate = Helpers.parseDate(r.date);
+            return recordDate && recordDate >= thirtyDaysAgo;
         });
         
         document.getElementById('stats-30days').textContent = recentRecords.length;
         document.getElementById('stats-avg-weekly').textContent = (recentRecords.length / 4.3).toFixed(1);
         
-        renderCharts(records, hdRecords);
         renderMonthlyReport(records);
-    }
-
-    function renderCharts(records, hdRecords) {
-        renderWeightChart(hdRecords);
-        renderUFChart(hdRecords);
-        renderFrequencyChart(records);
-        renderBPChart(hdRecords);
-        renderUFRChart(hdRecords);
+        
+        // 如果 Chart 可用，渲染图表
+        if (typeof Chart !== 'undefined' && Chart !== null) {
+            renderAllCharts(records, hdRecords);
+        }
     }
 
     function getChartColors() {
@@ -91,7 +101,11 @@ const StatsPage = (function() {
         
         const records = hdRecords
             .filter(r => r.weightBefore && r.weightAfter)
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .sort((a, b) => {
+                const dateA = Helpers.parseDate(a.date);
+                const dateB = Helpers.parseDate(b.date);
+                return (dateA ? dateA.getTime() : 0) - (dateB ? dateB.getTime() : 0);
+            })
             .slice(-15);
         
         if (records.length === 0) {
@@ -108,7 +122,7 @@ const StatsPage = (function() {
                 datasets: [
                     {
                         label: '透前体重',
-                        data: records.map(r => parseFloat(r.weightBefore)),
+                        data: records.map(r => Helpers.safeParseFloat(r.weightBefore)),
                         borderColor: colors.primary,
                         backgroundColor: colors.primary + '20',
                         tension: 0.3,
@@ -116,7 +130,7 @@ const StatsPage = (function() {
                     },
                     {
                         label: '透后体重',
-                        data: records.map(r => parseFloat(r.weightAfter)),
+                        data: records.map(r => Helpers.safeParseFloat(r.weightAfter)),
                         borderColor: colors.success,
                         backgroundColor: colors.success + '20',
                         tension: 0.3,
@@ -153,9 +167,23 @@ const StatsPage = (function() {
         
         if (ufChart) ufChart.destroy();
         
+        // 筛选有脱水量数据的记录（优先级：实际脱水量 > 目标脱水量 > 体重差值计算）
         const records = hdRecords
-            .filter(r => r.actualUF)
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .filter(r => {
+                // 有实际脱水量或目标脱水量
+                if (r.actualUF || r.targetUF) return true;
+                // 或者有体重数据可以计算
+                if (r.weightBefore && r.weightAfter) {
+                    const diff = parseFloat(r.weightBefore) - parseFloat(r.weightAfter);
+                    return diff > 0;
+                }
+                return false;
+            })
+            .sort((a, b) => {
+                const dateA = Helpers.parseDate(a.date);
+                const dateB = Helpers.parseDate(b.date);
+                return (dateA ? dateA.getTime() : 0) - (dateB ? dateB.getTime() : 0);
+            })
             .slice(-15);
         
         if (records.length === 0) {
@@ -165,13 +193,30 @@ const StatsPage = (function() {
         
         const colors = getChartColors();
         
+        // 计算脱水量：优先实际 > 目标 > 体重差值（kg转ml，乘以1000）
+        const ufData = records.map(r => {
+            if (Helpers.isValidNumber(r.actualUF)) return Helpers.safeParseFloat(r.actualUF);
+            if (Helpers.isValidNumber(r.targetUF)) return Helpers.safeParseFloat(r.targetUF);
+            // 使用体重差值计算（kg * 1000 = ml）
+            const weightDiff = Helpers.safeParseFloat(r.weightBefore) - Helpers.safeParseFloat(r.weightAfter);
+            return Math.round(weightDiff * 1000);
+        });
+        
+        const ufLabels = records.map(r => {
+            const date = r.date.slice(5);
+            // 标记数据来源
+            if (r.actualUF) return date;
+            if (r.targetUF) return date + '*';
+            return date + '~';  // ~ 表示由体重计算
+        });
+        
         ufChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: records.map(r => r.date.slice(5)),
+                labels: ufLabels,
                 datasets: [{
-                    label: '脱水量 (ml)',
-                    data: records.map(r => parseFloat(r.actualUF)),
+                    label: '脱水量 (ml) *目标 ~计算',
+                    data: ufData,
                     backgroundColor: colors.warning + '80',
                     borderColor: colors.warning,
                     borderWidth: 1
@@ -200,10 +245,12 @@ const StatsPage = (function() {
             }
         });
         
-        const totalUF = records.reduce((sum, r) => sum + parseFloat(r.actualUF), 0);
-        const maxUF = Math.max(...records.map(r => parseFloat(r.actualUF)));
-        document.getElementById('stats-total-uf').textContent = Math.round(totalUF);
+        const minUF = Math.min(...ufData);
+        const maxUF = Math.max(...ufData);
+        const avgUF = Math.round(ufData.reduce((sum, val) => sum + val, 0) / ufData.length);
+        document.getElementById('stats-min-uf').textContent = minUF;
         document.getElementById('stats-max-uf').textContent = maxUF;
+        document.getElementById('stats-avg-uf-chart').textContent = avgUF;
     }
 
     function renderFrequencyChart(records) {
@@ -291,7 +338,11 @@ const StatsPage = (function() {
         
         const records = hdRecords
             .filter(r => r.bpBefore && r.bpBefore.includes('/'))
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .sort((a, b) => {
+                const dateA = Helpers.parseDate(a.date);
+                const dateB = Helpers.parseDate(b.date);
+                return (dateA ? dateA.getTime() : 0) - (dateB ? dateB.getTime() : 0);
+            })
             .slice(-15);
         
         if (records.length === 0) {
@@ -308,14 +359,14 @@ const StatsPage = (function() {
                 datasets: [
                     {
                         label: '收缩压',
-                        data: records.map(r => parseInt(r.bpBefore.split('/')[0])),
+                        data: records.map(r => Helpers.safeParseInt(r.bpBefore.split('/')[0])),
                         borderColor: '#dc3545',
                         tension: 0.3,
                         fill: false
                     },
                     {
                         label: '舒张压',
-                        data: records.map(r => parseInt(r.bpBefore.split('/')[1])),
+                        data: records.map(r => Helpers.safeParseInt(r.bpBefore.split('/')[1])),
                         borderColor: '#28a745',
                         tension: 0.3,
                         fill: false
@@ -353,7 +404,11 @@ const StatsPage = (function() {
         
         const records = hdRecords
             .filter(r => r.weightBefore && r.weightAfter && r.actualUF)
-            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .sort((a, b) => {
+                const dateA = Helpers.parseDate(a.date);
+                const dateB = Helpers.parseDate(b.date);
+                return (dateA ? dateA.getTime() : 0) - (dateB ? dateB.getTime() : 0);
+            })
             .slice(-15);
         
         if (records.length === 0) {
@@ -362,8 +417,8 @@ const StatsPage = (function() {
         }
         
         const ufrData = records.map(r => {
-            const weightDiff = parseFloat(r.weightBefore) - parseFloat(r.weightAfter);
-            const ufr = parseFloat(r.actualUF);
+            const weightDiff = Helpers.safeParseFloat(r.weightBefore) - Helpers.safeParseFloat(r.weightAfter);
+            const ufr = Helpers.safeParseFloat(r.actualUF);
             return weightDiff > 0 ? ((ufr / weightDiff) * 100).toFixed(1) : 0;
         });
         
@@ -413,19 +468,29 @@ const StatsPage = (function() {
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const monthRecords = records.filter(r => {
-            const parts = r.date.split('-');
-            const recordDate = new Date(parts[0], parts[1] - 1, parts[2]);
-            return recordDate >= monthStart;
+            const recordDate = Helpers.parseDate(r.date);
+            return recordDate && recordDate >= monthStart;
         });
         const hdRecords = monthRecords.filter(r => r.type === 'hd');
         
         let html = '<div class="report-stats">';
         
         if (monthRecords.length > 0) {
-            const totalUF = hdRecords.reduce((sum, r) => sum + (parseFloat(r.actualUF) || 0), 0);
-            const avgUF = hdRecords.length > 0 ? Math.round(totalUF / hdRecords.length) : 0;
-            const avgWeight = hdRecords.length > 0 ? 
-                (hdRecords.reduce((sum, r) => sum + (parseFloat(r.weightBefore) || 0), 0) / hdRecords.length).toFixed(1) : 0;
+            // 计算脱水量：优先实际 > 目标 > 体重差值（kg转ml）
+            const ufValues = hdRecords.map(r => {
+                if (Helpers.isValidNumber(r.actualUF)) return Helpers.safeParseFloat(r.actualUF);
+                if (Helpers.isValidNumber(r.targetUF)) return Helpers.safeParseFloat(r.targetUF);
+                if (Helpers.isValidNumber(r.weightBefore) && Helpers.isValidNumber(r.weightAfter)) {
+                    const weightDiff = Helpers.safeParseFloat(r.weightBefore) - Helpers.safeParseFloat(r.weightAfter);
+                    return weightDiff > 0 ? Math.round(weightDiff * 1000) : 0;
+                }
+                return 0;
+            });
+            const totalUF = ufValues.reduce((sum, val) => sum + val, 0);
+            const validUFCount = ufValues.filter(v => v > 0).length;
+            const avgUF = validUFCount > 0 ? Math.round(totalUF / validUFCount) : 0;
+            const avgWeight = hdRecords.length > 0 ?
+                (hdRecords.reduce((sum, r) => sum + Helpers.safeParseFloat(r.weightBefore), 0) / hdRecords.length).toFixed(1) : 0;
             
             html += `
                 <div class="report-item">
@@ -453,15 +518,80 @@ const StatsPage = (function() {
         container.innerHTML = html;
     }
 
+    function renderAllCharts(records, hdRecords) {
+        renderWeightChart(hdRecords);
+        renderUFChart(hdRecords);
+        renderFrequencyChart(records);
+        renderBPChart(hdRecords);
+        renderUFRChart(hdRecords);
+    }
+
+    // 销毁所有图表实例（页面切换时调用）
+    function destroyAllCharts() {
+        if (weightChart) {
+            weightChart.destroy();
+            weightChart = null;
+        }
+        if (ufChart) {
+            ufChart.destroy();
+            ufChart = null;
+        }
+        if (freqChart) {
+            freqChart.destroy();
+            freqChart = null;
+        }
+        if (bpChart) {
+            bpChart.destroy();
+            bpChart = null;
+        }
+        if (ufrChart) {
+            ufrChart.destroy();
+            ufrChart = null;
+        }
+    }
+
     return {
         load,
         renderWeightChart,
         renderUFChart,
         renderFrequencyChart,
         renderBPChart,
-        renderUFRChart
+        renderUFRChart,
+        renderAllCharts,
+        destroyAllCharts
     };
 })();
 
 window.StatsPage = StatsPage;
 window.loadStatsPage = StatsPage.load;
+
+// 统计卡片折叠/展开功能
+function toggleStatsCard(header) {
+    const card = header.closest('.stats-card');
+    const content = card.querySelector('.card-content');
+    const icon = header.querySelector('.toggle-icon');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.textContent = '▼';
+        // 展开时重新渲染图表（如果该卡片包含图表）
+        const canvas = content.querySelector('canvas');
+        if (canvas && StatsPage) {
+            const chartId = canvas.id;
+            const records = Data.getRecords();
+            const hdRecords = records.filter(r => r.type === 'hd');
+            
+            // 根据图表ID重新渲染
+            if (chartId === 'weight-chart') StatsPage.renderWeightChart(hdRecords);
+            else if (chartId === 'uf-chart') StatsPage.renderUFChart(hdRecords);
+            else if (chartId === 'frequency-chart') StatsPage.renderFrequencyChart(records);
+            else if (chartId === 'bp-chart') StatsPage.renderBPChart(hdRecords);
+            else if (chartId === 'ufr-chart') StatsPage.renderUFRChart(hdRecords);
+        }
+    } else {
+        content.style.display = 'none';
+        icon.textContent = '▶';
+    }
+}
+
+window.toggleStatsCard = toggleStatsCard;

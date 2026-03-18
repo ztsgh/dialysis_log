@@ -29,16 +29,14 @@ const HomePage = (function() {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         
         const weekRecords = records.filter(r => {
-            const parts = r.date.split('-');
-            const recordDate = new Date(parts[0], parts[1] - 1, parts[2]);
-            return recordDate >= weekStart;
+            const recordDate = Helpers.parseDate(r.date);
+            return recordDate && recordDate >= weekStart;
         });
         document.getElementById('week-count').textContent = weekRecords.length;
         
         const monthRecords = records.filter(r => {
-            const parts = r.date.split('-');
-            const recordDate = new Date(parts[0], parts[1] - 1, parts[2]);
-            return recordDate >= monthStart;
+            const recordDate = Helpers.parseDate(r.date);
+            return recordDate && recordDate >= monthStart;
         });
         document.getElementById('month-count').textContent = monthRecords.length;
         
@@ -50,77 +48,13 @@ const HomePage = (function() {
         if (recentRecords.length === 0) {
             recentList.innerHTML = '<p class="empty-tip">暂无记录，点击上方按钮开始记录</p>';
         } else {
-            recentList.innerHTML = recentRecords.map(r => createRecordItem(r)).join('');
+            recentList.innerHTML = recentRecords.map(r => createRecordItemLocal(r)).join('');
         }
     }
 
-    function createRecordItem(record) {
-        const typeClass = record.type === 'hd' ? 'hd' : 'pd';
-        const typeText = record.type === 'hd' ? '🩺 血液透析' : '💊 腹膜透析';
-        const dateStr = formatDate(record.date);
-        
-        let bodyHtml = '';
-        if (record.type === 'hd') {
-            // 如果 shiftLabel 为空但有 shift 值，尝试转换
-            let shiftLabel = record.shiftLabel || '';
-            if (!shiftLabel && record.shift) {
-                shiftLabel = getShiftLabel(record.shift);
-            }
-            shiftLabel = shiftLabel || '--';
-            const weightBefore = record.weightBefore ? record.weightBefore + ' kg' : '--';
-            const weightAfter = record.weightAfter ? record.weightAfter + ' kg' : '--';
-            // 优先显示实际脱水量，如果为空则显示目标脱水量
-            const ufValue = record.actualUF || record.targetUF || '';
-            const ufDisplay = ufValue ? ufValue + ' ml' : '--';
-            const bpBefore = record.bpBefore || '--';
-            const bpAfter = record.bpAfter ? '/' + record.bpAfter : '';
-            const bed = record.bed || '--';
-            
-            bodyHtml = `
-                <div class="record-item-row">
-                    <div class="record-detail"><span class="record-detail-label">班次:</span><span class="record-detail-value">${escapeHtml(shiftLabel)}</span></div>
-                    <div class="record-detail"><span class="record-detail-label">体重:</span><span class="record-detail-value">${escapeHtml(weightBefore)}→${escapeHtml(weightAfter)}</span></div>
-                    <div class="record-detail"><span class="record-detail-label">脱水:</span><span class="record-detail-value">${escapeHtml(ufDisplay)}</span></div>
-                </div>
-                <div class="record-item-row">
-                    <div class="record-detail"><span class="record-detail-label">血压:</span><span class="record-detail-value">${escapeHtml(bpBefore)}${escapeHtml(bpAfter)}</span></div>
-                    <div class="record-detail"><span class="record-detail-label">床位:</span><span class="record-detail-value">${escapeHtml(bed)}</span></div>
-                </div>
-            `;
-        } else {
-            const concentration = record.concentration || '--';
-            const inflow = record.inflow ? record.inflow + ' ml' : '--';
-            const outflow = record.outflow ? record.outflow + ' ml' : '--';
-            const dwellTime = record.dwellTime || '--';
-            const weight = record.weight ? record.weight + ' kg' : '--';
-            
-            bodyHtml = `
-                <div class="record-item-row">
-                    <div class="record-detail"><span class="record-detail-label">浓度:</span><span class="record-detail-value">${escapeHtml(concentration)}</span></div>
-                    <div class="record-detail"><span class="record-detail-label">灌入:</span><span class="record-detail-value">${escapeHtml(inflow)}</span></div>
-                    <div class="record-detail"><span class="record-detail-label">排出:</span><span class="record-detail-value">${escapeHtml(outflow)}</span></div>
-                </div>
-                <div class="record-item-row">
-                    <div class="record-detail"><span class="record-detail-label">留腹:</span><span class="record-detail-value">${escapeHtml(dwellTime)}</span></div>
-                    <div class="record-detail"><span class="record-detail-label">体重:</span><span class="record-detail-value">${escapeHtml(weight)}</span></div>
-                </div>
-            `;
-        }
-        
-        return `
-            <div class="record-item" onclick="viewRecordDetail(${record.id})">
-                <div class="record-item-header">
-                    <span class="record-type ${typeClass}">${typeText}</span>
-                    <span class="record-date">${escapeHtml(dateStr)}</span>
-                </div>
-                <div class="record-item-body">
-                    ${bodyHtml}
-                </div>
-                <div class="record-item-footer">
-                    <button class="btn-delete" onclick="event.stopPropagation(); deleteRecordConfirm(${record.id})">删除</button>
-                </div>
-            </div>
-        `;
+    // 使用公共函数创建记录项
+    function createRecordItemLocal(record) {
+        return Helpers.createRecordItem(record, { showDelete: true });
     }
 
     function switchView(view) {
@@ -181,12 +115,12 @@ const HomePage = (function() {
         
         const recordMap = {};
         records.forEach(r => {
-            // 使用更可靠的日期解析方法
-            const dateParts = r.date.split('-');
-            const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-            if (!recordMap[key]) recordMap[key] = [];
-            recordMap[key].push(r);
+            const date = Helpers.parseDate(r.date);
+            if (date) {
+                const key = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                if (!recordMap[key]) recordMap[key] = [];
+                recordMap[key].push(r);
+            }
         });
         
         let html = '';
@@ -236,13 +170,12 @@ const HomePage = (function() {
 
     function onDayClick(dateStr) {
         const records = Data.getRecords();
+        const clickDate = Helpers.parseDate(dateStr);
+        if (!clickDate) return;
+        
         const dayRecords = records.filter(r => {
-            // 使用更可靠的日期解析方法
-            const recordParts = r.date.split('-');
-            const recordDate = new Date(recordParts[0], recordParts[1] - 1, recordParts[2]);
-            const clickParts = dateStr.split('-');
-            const clickDate = new Date(clickParts[0], clickParts[1] - 1, clickParts[2]);
-            return recordDate.toDateString() === clickDate.toDateString();
+            const recordDate = Helpers.parseDate(r.date);
+            return recordDate && recordDate.toDateString() === clickDate.toDateString();
         });
         
         if (dayRecords.length === 0) {
@@ -275,8 +208,7 @@ const HomePage = (function() {
         prevMonth,
         nextMonth,
         renderCalendar,
-        onDayClick,
-        createRecordItem
+        onDayClick
     };
 })();
 

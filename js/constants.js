@@ -23,14 +23,14 @@ const CONSTANTS = (function() {
     // 透析液性状选项
     const FLUID_APPEARANCES = ['清亮', '微浑', '浑浊', '血性'];
 
-    // 不良反应选项 - 血液透析
-    const HD_REACTIONS = ['低血压', '高血压', '头痛', '恶心', '呕吐', '肌肉痉挛', '发热', '其他'];
+    // 不良反应选项 - 血液透析（与index.html同步）
+    const HD_REACTIONS = ['低血压', '抽筋', '恶心', '头晕', '无'];
 
-    // 不良反应选项 - 腹膜透析
-    const PD_REACTIONS = ['腹痛', '腹胀', '发热', '透析液浑浊', '出口处感染', '其他'];
+    // 不良反应选项 - 腹膜透析（与index.html同步）
+    const PD_REACTIONS = ['腹痛', '发热', '水肿', '无'];
 
-    // 烤电项目选项
-    const HEATING_OPTIONS = ['红外线照射', '微波照射', '热敷', '其他'];
+    // 烤电项目选项（与index.html同步）
+    const HEATING_OPTIONS = ['红外线照射', '中频理疗', '低频理疗', '超短波治疗', '其他'];
 
     // 提醒提前时间选项
     const REMINDER_TIMES = [
