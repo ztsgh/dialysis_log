@@ -3,9 +3,6 @@
  * 使用LocalStorage存储数据
  */
 
-// 编辑状态（全局）
-let editingRecordId = null;
-
 // ==================== 页面导航 ====================
 
 function showPage(pageId) {
@@ -19,7 +16,7 @@ function showPage(pageId) {
         
         // 只在非记录编辑页面时重置编辑状态
         if (pageId !== 'page-record-hd' && pageId !== 'page-record-pd') {
-            editingRecordId = null;
+            window.editingRecordId = null;
         }
         
         // 隐藏所有页面
@@ -496,8 +493,8 @@ function editRecord(id) {
         return;
     }
     
-    // 设置编辑状态
-    editingRecordId = id;
+    // 设置编辑状态（使用全局属性，与 forms.js 保持一致）
+    window.editingRecordId = id;
     
     if (record.type === 'hd') {
         // 填充血液透析表单
