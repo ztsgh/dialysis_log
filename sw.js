@@ -3,7 +3,7 @@
  * 支持离线缓存和后台同步
  */
 
-const CACHE_NAME = 'dialysis-diary-v10';
+const CACHE_NAME = 'dialysis-diary-v11';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
