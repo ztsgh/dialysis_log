@@ -1,3 +1,5 @@
+# dialysis_log
+
 # 肾友日记 - 透析健康管理 PWA 应用
 
 ## 项目简介
@@ -510,3 +512,7 @@ MIT License
 ## 联系方式
 
 如有问题或建议，请提交 Issue 或 Pull Request。
+
+
+Hemodialysis log
+ b866fff6f265b1fd367c8912c4896119132def4f
