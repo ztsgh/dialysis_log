@@ -3,12 +3,13 @@
  * 支持离线缓存和后台同步
  */
 
-const CACHE_NAME = 'dialysis-diary-v2';
+const CACHE_NAME = 'dialysis-diary-v4';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './css/style.css',
     './js/app.js',
+    './js/chart.min.js',
     './manifest.json',
     './icons/icon.svg'
 ];
@@ -110,6 +111,11 @@ function fetchAndCache(request) {
                 return response;
             }
 
+            // 跳过非同源请求（如 CDN）
+            if (!request.url.startsWith(self.location.origin)) {
+                return response;
+            }
+
             // 克隆响应（因为响应是流，只能使用一次）
             const responseToCache = response.clone();
 
@@ -117,9 +123,16 @@ function fetchAndCache(request) {
             caches.open(CACHE_NAME)
                 .then((cache) => {
                     cache.put(request, responseToCache);
+                })
+                .catch((err) => {
+                    console.warn('[ServiceWorker] 缓存失败:', err);
                 });
 
             return response;
+        })
+        .catch((err) => {
+            console.warn('[ServiceWorker] 获取资源失败:', request.url, err);
+            throw err; // 重新抛出错误，让调用者处理
         });
 }
 

@@ -179,12 +179,13 @@ function showImportError(msg)   // 显示导入错误提示
 ### 5. Service Worker 模块 ([`sw.js`](sw.js))
 ```javascript
 // 缓存策略
-const CACHE_NAME = 'dialysis-diary-v2';
+const CACHE_NAME = 'dialysis-diary-v4';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './css/style.css',
     './js/app.js',
+    './js/chart.min.js',
     './manifest.json',
     './icons/icon.svg'
 ];
@@ -408,9 +409,9 @@ const SHIFT_TIMES = {
 ### 更新缓存版本
 修改 [`sw.js`](sw.js:6) 中的缓存名称，确保缓存更新策略：
 ```javascript
-const CACHE_NAME = 'dialysis-diary-v2'; // 当前版本 v2
+const CACHE_NAME = 'dialysis-diary-v4'; // 当前版本 v4
 ```
-版本更新时修改版本号（如 v3、v4），Service Worker 会在激活时自动清理旧缓存。
+版本更新时修改版本号，Service Worker 会在激活时自动清理旧缓存。
 
 ### 核心流程验证
 开发完成后需验证核心流程完整性：
@@ -486,6 +487,11 @@ const CACHE_NAME = 'dialysis-diary-v2'; // 当前版本 v2
 4. 检查数值字段（体重、脱水量等）是否为合法格式
 
 ## 更新日志
+
+### v2.1.0
+- **日历布局修复**：解决小屏手机日历溢出问题，从 CSS Grid 改为 Flexbox 布局
+- **Service Worker 优化**：修复 `fetchAndCache` 网络错误处理，跳过非同源请求
+- **缓存版本升级**：从 v3 升级到 v4，确保缓存正确更新
 
 ### v2.0.0
 - **深色模式增强**：新增手动切换按钮，支持自动/浅色/深色三种模式

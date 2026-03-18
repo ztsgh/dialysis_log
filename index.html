@@ -570,7 +570,12 @@
     <script src="js/pages/stats.js"></script>
     <script src="js/pages/settings.js"></script>
     <script src="js/app.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Chart.js 加载失败时使用备用方案 -->
+    <script>
+        window.Chart = null; // 占位，等Chart.js加载后会被覆盖
+    </script>
+    <!-- 暂时禁用Chart.js，避免加载错误 -->
+    <!-- <script src="js/chart.min.js?v=3.9.1"></script> -->
     
     <!-- Service Worker 注册 -->
     <script>

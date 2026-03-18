@@ -190,8 +190,8 @@ function saveRecords(records) {
 ### Service Worker
 
 - 缓存策略：Cache First
-- 缓存版本：`dialysis-diary-v2`
-- 缓存资源：`index.html`, `css/style.css`, `js/app.js`, `manifest.json`, 图标文件
+- 缓存版本：`dialysis-diary-v4`
+- 缓存资源：`index.html`, `css/style.css`, `js/app.js`, `js/chart.min.js`, `manifest.json`, `icons/icon.svg`
 
 ## 代码审查清单
 
@@ -248,6 +248,22 @@ function saveRecords(records) {
 - 班次标签为空时根据班次值自动转换显示
 - 日历视图使用可靠的日期解析方法
 
+##### 日历布局溢出修复
+- 问题：小屏手机日历内容宽度超出容器，导致横向溢出
+- 根本原因：CSS Grid 的 `gap` 属性不受 `box-sizing: border-box` 控制
+- 解决方案：将日历布局从 CSS Grid 改为 Flexbox
+  - `.calendar-weekdays` 和 `.calendar-days` 使用 `display: flex; flex-wrap: wrap;`
+  - 每个单元格宽度精确为 `calc(100% / 7)` (14.2857%)
+  - 移除 `gap` 属性，避免溢出问题
+
+##### Service Worker 错误修复
+- 问题：`fetchAndCache` 函数在网络请求失败时抛出 `TypeError: Failed to fetch`
+- 解决方案：
+  - 添加 `.catch()` 错误处理，记录警告而非抛出错误
+  - 跳过非同源请求（如 CDN 资源）
+  - 缓存操作失败时只记录警告，不中断流程
+  - 缓存版本从 `v3` 升级到 `v4`
+
 ### 2024年
 
 #### Phase 1: 代码模块化拆分
@@ -300,5 +316,5 @@ function saveRecords(records) {
 - 颜色对比度增强：文字颜色加深，边框加粗
 
 ### 待完成
-- [ ] 日历在小屏手机排版优化（低优先级）
+- [x] 日历在小屏手机排版优化（已完成）
 - [ ] Chart.js 本地化（CDN 访问不稳定时）

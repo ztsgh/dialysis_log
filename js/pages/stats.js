@@ -12,18 +12,22 @@ const StatsPage = (function() {
 
     function load() {
         loadAttempts++;
-        if (typeof Chart === 'undefined') {
-            if (loadAttempts < 50) {
+        if (typeof Chart === 'undefined' || Chart === null) {
+            if (loadAttempts < 10) {
                 setTimeout(load, 100);
             } else {
-                document.getElementById('stats-total').textContent = Data.getRecords().length;
-                showToast('图表加载失败，请检查网络连接');
+                // Chart.js 不可用，只显示统计数字
+                renderStatsOnly();
             }
             return;
         }
         
         loadAttempts = 0;
-        
+        renderStatsOnly();
+        renderCharts(records, hdRecords);
+    }
+    
+    function renderStatsOnly() {
         const records = Data.getRecords();
         
         const hdRecords = records.filter(r => r.type === 'hd');
@@ -57,16 +61,12 @@ const StatsPage = (function() {
         document.getElementById('stats-30days').textContent = recentRecords.length;
         document.getElementById('stats-avg-weekly').textContent = (recentRecords.length / 4.3).toFixed(1);
         
-        renderCharts(records, hdRecords);
         renderMonthlyReport(records);
-    }
-
-    function renderCharts(records, hdRecords) {
-        renderWeightChart(hdRecords);
-        renderUFChart(hdRecords);
-        renderFrequencyChart(records);
-        renderBPChart(hdRecords);
-        renderUFRChart(hdRecords);
+        
+        // 如果 Chart 可用，渲染图表
+        if (typeof Chart !== 'undefined' && Chart !== null) {
+            renderCharts(records, hdRecords);
+        }
     }
 
     function getChartColors() {
