@@ -56,6 +56,9 @@ function showPage(pageId) {
             loadStatsPage();
         } else if (pageId === 'page-settings') {
             loadSettingsPage();
+        } else if (pageId === 'page-record-hd-quick') {
+            // 每次进入快速添加页面时初始化默认值
+            initQuickAddPage();
         }
     } catch (e) {
         console.error('页面切换错误:', e);

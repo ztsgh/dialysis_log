@@ -1497,14 +1497,19 @@ body {
 }
 
 .calendar-footer .btn {
-    width: 100%;
+    display: inline-block;
+    width: auto;
+    min-width: 200px;
+    max-width: 100%;
     height: 56px;
+    padding: 0 32px;
     font-size: 18px;
     font-weight: 600;
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: white;
     border: none;
     border-radius: 12px;
+    margin: 0 auto;
 }
 
 .calendar-header {
