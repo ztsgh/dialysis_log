@@ -471,6 +471,69 @@ function savePDRecord() {
     Forms.submitPD();
 }
 
+// 快速保存血液透析记录
+function saveQuickHDRecord() {
+    const date = document.getElementById('quick-date').value;
+    const shift = document.getElementById('quick-shift').value;
+    const weightBefore = document.getElementById('quick-weight-before').value;
+    const targetUF = document.getElementById('quick-target-uf').value;
+    const bed = document.getElementById('quick-bed').value;
+    const mode = document.getElementById('quick-mode').value || 'normal';
+    
+    // 验证必填字段
+    if (!date) {
+        showToast('请选择透析日期');
+        return;
+    }
+    if (!shift) {
+        showToast('请选择透析班次');
+        return;
+    }
+    if (!weightBefore) {
+        showToast('请输入透析前体重');
+        return;
+    }
+    
+    // 获取班次显示标签
+    const shiftLabel = Helpers.getShiftLabel(shift);
+    
+    // 创建记录
+    const record = {
+        id: Date.now(),
+        type: 'hd',
+        date: date,
+        shift: shift,
+        shiftLabel: shiftLabel,
+        weightBefore: weightBefore,
+        targetUF: targetUF,
+        bed: bed,
+        mode: mode,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    
+    // 保存记录
+    Data.addRecord(record);
+    showToast('记录已保存');
+    
+    // 返回首页并刷新
+    showPage('page-home');
+    loadHomePage();
+}
+
+// 初始化快速添加页面
+function initQuickAddPage() {
+    // 设置默认日期为今天
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('quick-date').value = today;
+    
+    // 设置默认班次（从设置中读取）
+    const settings = getSettings();
+    if (settings.defaultShift) {
+        document.getElementById('quick-shift').value = settings.defaultShift;
+    }
+}
+
 // 编辑记录
 function editRecord(id) {
     const records = getRecords();
@@ -589,6 +652,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initTheme();
     
     initForms();
+    initQuickAddPage();
     loadHomePage();
     
     // 绑定删除确认按钮事件
