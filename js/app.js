@@ -7,13 +7,6 @@
 
 function showPage(pageId) {
     try {
-        // 防止快速重复点击
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => item.style.pointerEvents = 'none');
-        setTimeout(() => {
-            navItems.forEach(item => item.style.pointerEvents = '');
-        }, 300);
-        
         // 只在非记录编辑页面时重置编辑状态
         if (pageId !== 'page-record-hd' && pageId !== 'page-record-pd') {
             window.editingRecordId = null;
@@ -66,10 +59,6 @@ function showPage(pageId) {
         }
     } catch (e) {
         console.error('页面切换错误:', e);
-        // 确保导航按钮始终可用
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.style.pointerEvents = '';
-        });
     }
 }
 
@@ -389,10 +378,9 @@ function parseCSVLine(line) {
 
 // 清除所有数据
 function clearAllData() {
-    if (confirm('确定要清除所有数据吗？此操作不可恢复！')) {
+    if (confirm('确定要清除所有透析记录吗？此操作不可恢复！')) {
         Data.clearAllRecords();
-        Data.saveSettings({});
-        showToast('所有数据已清除');
+        showToast('所有透析记录已清除');
         loadHomePage();
     }
 }
@@ -586,6 +574,12 @@ function viewRecordDetail(id) {
 // ==================== 初始化 ====================
 
 document.addEventListener('DOMContentLoaded', function() {
+    // 隐藏首屏 Loading
+    const loader = document.getElementById('app-loader');
+    if (loader) {
+        loader.classList.add('hidden');
+    }
+    
     // 初始化主题
     initTheme();
     
@@ -640,10 +634,13 @@ function updateOnlineStatus() {
 }
 
 function triggerBackgroundSync() {
+    // TODO: 后台同步预留功能（需对接后端API）
+    // 当前纯前端版本不需要后台同步，保留此函数接口以便后续扩展
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
         navigator.serviceWorker.ready.then((registration) => {
             return registration.sync.register('sync-records');
         }).catch(() => {
+            // 静默失败，不影响用户操作
         });
     }
 }

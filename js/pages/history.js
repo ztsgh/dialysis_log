@@ -6,12 +6,59 @@ const HistoryPage = (function() {
     // 排序状态
     let sortDescending = true;
     let pendingDeleteId = null;
+    // 分页状态
+    const PAGE_SIZE = 30;
+    let currentPage = 1;
+    let filteredRecords = [];
+    let isLoadingMore = false;
 
     // 加载历史记录页
     function load() {
+        currentPage = 1;
         updateYearFilter();
         updateSortButton();
         filterRecords();
+    }
+
+    // 加载更多
+    function loadMore() {
+        if (isLoadingMore) return;
+        isLoadingMore = true;
+        
+        currentPage++;
+        renderRecordsPage();
+        
+        setTimeout(() => {
+            isLoadingMore = false;
+        }, 300);
+    }
+
+    // 渲染当前页
+    function renderRecordsPage() {
+        const start = (currentPage - 1) * PAGE_SIZE;
+        const end = start + PAGE_SIZE;
+        const pageRecords = filteredRecords.slice(start, end);
+        
+        const historyList = document.getElementById('history-list');
+        
+        if (filteredRecords.length === 0) {
+            historyList.innerHTML = '<p class="empty-tip">暂无符合条件的记录</p>';
+            return;
+        }
+        
+        if (currentPage === 1) {
+            historyList.innerHTML = pageRecords.map(r => createRecordItemWithActions(r)).join('');
+        } else {
+            const existingItems = historyList.querySelectorAll('.record-item');
+            const newItems = pageRecords.map(r => createRecordItemWithActions(r)).join('');
+            historyList.innerHTML = historyList.innerHTML + newItems;
+        }
+        
+        // 显示/隐藏加载更多按钮
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = end < filteredRecords.length ? 'block' : 'none';
+        }
     }
 
     // 切换排序顺序
@@ -88,12 +135,31 @@ const HistoryPage = (function() {
             return sortDescending ? (timeB - timeA) : (timeA - timeB);
         });
         
-        const historyList = document.getElementById('history-list');
+        filteredRecords = records;
+        currentPage = 1;
+        renderRecordsPage();
         
-        if (records.length === 0) {
-            historyList.innerHTML = '<p class="empty-tip">暂无符合条件的记录</p>';
-        } else {
-            historyList.innerHTML = records.map(r => createRecordItemWithActions(r)).join('');
+        // 添加加载更多按钮
+        addLoadMoreButton();
+    }
+
+    // 添加加载更多按钮
+    function addLoadMoreButton() {
+        const historyList = document.getElementById('history-list');
+        let loadMoreBtn = document.getElementById('load-more-btn');
+        
+        if (!loadMoreBtn && filteredRecords.length > PAGE_SIZE) {
+            loadMoreBtn = document.createElement('button');
+            loadMoreBtn.id = 'load-more-btn';
+            loadMoreBtn.className = 'btn btn-secondary';
+            loadMoreBtn.style.cssText = 'width:100%;margin-top:15px;';
+            loadMoreBtn.textContent = '加载更多';
+            loadMoreBtn.onclick = loadMore;
+            historyList.appendChild(loadMoreBtn);
+        }
+        
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = filteredRecords.length > PAGE_SIZE ? 'block' : 'none';
         }
     }
 
@@ -127,6 +193,7 @@ const HistoryPage = (function() {
 
     return {
         load,
+        loadMore,
         toggleSortOrder,
         filterRecords,
         deleteRecordConfirm,
@@ -138,6 +205,7 @@ const HistoryPage = (function() {
 // 全局别名
 window.HistoryPage = HistoryPage;
 window.loadHistoryPage = HistoryPage.load;
+window.loadMoreRecords = HistoryPage.loadMore;
 window.toggleSortOrder = HistoryPage.toggleSortOrder;
 window.filterRecords = HistoryPage.filterRecords;
 window.deleteRecordConfirm = HistoryPage.deleteRecordConfirm;

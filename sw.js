@@ -3,13 +3,12 @@
  * 支持离线缓存和后台同步
  */
 
-const CACHE_NAME = 'dialysis-diary-v11';
+const CACHE_NAME = 'dialysis-diary-v13';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './css/style.css',
     './js/app.js',
-    './js/chart.min.js',
     './js/constants.js',
     './js/data.js',
     './js/utils/helpers.js',
@@ -37,6 +36,7 @@ self.addEventListener('install', (event) => {
             })
             .then(() => {
                 console.log('[ServiceWorker] 安装完成');
+                // 跳过等待，立即激活（对于首次安装）
                 return self.skipWaiting();
             })
     );
@@ -58,19 +58,6 @@ self.addEventListener('activate', (event) => {
         }).then(() => {
             console.log('[ServiceWorker] 激活完成');
             return self.clients.claim();
-        })
-    );
-    
-    // 通知所有客户端有新版本可用
-    event.waitUntil(
-        self.clients.claim().then(() => {
-            return self.clients.matchAll();
-        }).then(clients => {
-            clients.forEach(client => {
-                client.postMessage({
-                    type: 'SW_UPDATED'
-                });
-            });
         })
     );
 });

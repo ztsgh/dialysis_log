@@ -9,21 +9,73 @@ const StatsPage = (function() {
     let bpChart = null;
     let ufrChart = null;
     let loadAttempts = 0;
+    let chartLoaded = false;
+
+    // 动态加载 Chart.js
+    function loadChartJS() {
+        return new Promise((resolve, reject) => {
+            if (typeof Chart !== 'undefined' && Chart !== null) {
+                resolve();
+                return;
+            }
+            
+            const script = document.createElement('script');
+            script.src = 'js/chart.min.js';
+            script.onload = () => {
+                console.log('Chart.js 加载成功');
+                resolve();
+            };
+            script.onerror = () => {
+                console.error('Chart.js 加载失败');
+                reject(new Error('Chart.js 加载失败'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    // 显示加载提示
+    function showLoadingHints() {
+        const chartCanvases = ['weight-chart', 'uf-chart', 'frequency-chart', 'bp-chart', 'ufr-chart'];
+        chartCanvases.forEach(id => {
+            const canvas = document.getElementById(id);
+            if (canvas && canvas.parentElement) {
+                const parent = canvas.parentElement;
+                if (!parent.querySelector('.chart-loading')) {
+                    const loadingDiv = document.createElement('div');
+                    loadingDiv.className = 'chart-loading';
+                    loadingDiv.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#999;font-size:14px;';
+                    loadingDiv.textContent = '图表加载中...';
+                    parent.style.position = 'relative';
+                    parent.appendChild(loadingDiv);
+                }
+            }
+        });
+    }
+
+    // 隐藏加载提示
+    function hideLoadingHints() {
+        document.querySelectorAll('.chart-loading').forEach(el => el.remove());
+    }
 
     function load() {
-        loadAttempts++;
-        if (typeof Chart === 'undefined' || Chart === null) {
-            if (loadAttempts < 10) {
-                setTimeout(load, 100);
-            } else {
-                // Chart.js 不可用，只显示统计数字
-                renderStatsOnly();
-            }
-            return;
-        }
+        showLoadingHints();
         
-        loadAttempts = 0;
-        renderStatsOnly();
+        loadChartJS().then(() => {
+            chartLoaded = true;
+            loadAttempts = 0;
+            hideLoadingHints();
+            renderStatsOnly();
+        }).catch(() => {
+            chartLoaded = false;
+            loadAttempts++;
+            if (loadAttempts < 10) {
+                setTimeout(load, 500);
+            } else {
+                hideLoadingHints();
+                renderStatsOnly();
+                console.warn('Chart.js 加载超时，图表功能已禁用');
+            }
+        });
     }
     
     function renderStatsOnly() {
@@ -359,14 +411,20 @@ const StatsPage = (function() {
                 datasets: [
                     {
                         label: '收缩压',
-                        data: records.map(r => Helpers.safeParseInt(r.bpBefore.split('/')[0])),
+                        data: records.map(r => {
+                            if (!r.bpBefore || !r.bpBefore.includes('/')) return null;
+                            return Helpers.safeParseInt(r.bpBefore.split('/')[0]);
+                        }).filter(v => v !== null),
                         borderColor: '#dc3545',
                         tension: 0.3,
                         fill: false
                     },
                     {
                         label: '舒张压',
-                        data: records.map(r => Helpers.safeParseInt(r.bpBefore.split('/')[1])),
+                        data: records.map(r => {
+                            if (!r.bpBefore || !r.bpBefore.includes('/')) return null;
+                            return Helpers.safeParseInt(r.bpBefore.split('/')[1]);
+                        }).filter(v => v !== null),
                         borderColor: '#28a745',
                         tension: 0.3,
                         fill: false

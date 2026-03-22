@@ -11,6 +11,50 @@
     <meta name="mobile-web-app-capable" content="yes">
     <title>肾友日记 - 透析健康管理</title>
     
+    <!-- 首屏 Loading - 内联样式确保立即显示 -->
+    <style>
+        #app-loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f5f7fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        #app-loader.hidden {
+            display: none;
+        }
+        .loader-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #4A90D9;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        .loader-text {
+            margin-top: 16px;
+            color: #666;
+            font-size: 16px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @media (prefers-color-scheme: dark) {
+            #app-loader {
+                background: #1a1a1a;
+            }
+            .loader-text {
+                color: #aaa;
+            }
+        }
+    </style>
+    
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
     
@@ -21,6 +65,11 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- 首屏 Loading -->
+    <div id="app-loader">
+        <div class="loader-spinner"></div>
+        <div class="loader-text">加载中...</div>
+    </div>
     <div class="app-container">
         <!-- 顶部导航 -->
         <header class="app-header">
@@ -575,8 +624,7 @@
         </div>
     </div>
 
-    <!-- Chart.js 必须在其他脚本之前加载，避免统计页等待 -->
-    <script src="js/chart.min.js"></script>
+
     <script src="js/constants.js"></script>
     <script src="js/utils/helpers.js"></script>
     <script src="js/utils/validate.js"></script>
@@ -591,10 +639,11 @@
     <script src="js/pages/settings.js"></script>
     <script src="js/app.js"></script>
     
-    <!-- Service Worker 注册 -->
+    <!-- Service Worker 注册 - 非阻塞延迟加载 -->
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', function() {
+            // 延迟 1 秒后注册，避免阻塞页面初始加载
+            setTimeout(function() {
                 navigator.serviceWorker.register('./sw.js')
                     .then(function(registration) {
                         console.log('ServiceWorker 注册成功:', registration.scope);
@@ -602,7 +651,7 @@
                     .catch(function(error) {
                         console.log('ServiceWorker 注册失败:', error);
                     });
-            });
+            }, 1000);
         }
         
         // PWA 安装提示
