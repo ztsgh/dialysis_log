@@ -579,6 +579,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (loader) {
         loader.classList.add('hidden');
     }
+    // 清除超时
+    if (window.__loaderTimeout) {
+        clearTimeout(window.__loaderTimeout);
+        window.__loaderTimeout = null;
+    }
     
     // 初始化主题
     initTheme();
