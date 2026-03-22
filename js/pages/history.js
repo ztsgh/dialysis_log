@@ -15,9 +15,15 @@ const HistoryPage = (function() {
     // 加载历史记录页
     function load() {
         currentPage = 1;
-        updateYearFilter();
-        updateSortButton();
-        filterRecords();
+        // 先显示加载状态，数据处理延迟执行
+        const historyList = document.getElementById('history-list');
+        historyList.innerHTML = '<p class="empty-tip">加载中...</p>';
+        
+        setTimeout(function() {
+            updateYearFilter();
+            updateSortButton();
+            filterRecords();
+        }, 50);
     }
 
     // 加载更多
