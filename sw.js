@@ -3,7 +3,7 @@
  * 支持离线缓存和后台同步
  */
 
-const CACHE_NAME = 'dialysis-diary-v13';
+const CACHE_NAME = 'dialysis-diary-v14';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -25,7 +25,7 @@ const ASSETS_TO_CACHE = [
     './icons/icon.svg'
 ];
 
-// 安装事件 - 缓存核心资源
+// 安装事件 - 缓存核心资源（不阻塞页面）
 self.addEventListener('install', (event) => {
     console.log('[ServiceWorker] 安装中...');
     event.waitUntil(
@@ -35,9 +35,8 @@ self.addEventListener('install', (event) => {
                 return cache.addAll(ASSETS_TO_CACHE);
             })
             .then(() => {
-                console.log('[ServiceWorker] 安装完成');
-                // 跳过等待，立即激活（对于首次安装）
-                return self.skipWaiting();
+                console.log('[ServiceWorker] 安装完成，等待页面加载后激活');
+                // 不调用 skipWaiting()，让 SW 等待页面加载完成再激活，避免阻塞
             })
     );
 });

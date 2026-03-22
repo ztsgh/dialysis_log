@@ -8,8 +8,8 @@ const StatsPage = (function() {
     let freqChart = null;
     let bpChart = null;
     let ufrChart = null;
-    let loadAttempts = 0;
     let chartLoaded = false;
+    let isLoading = false;
 
     // 动态加载 Chart.js
     function loadChartJS() {
@@ -58,23 +58,33 @@ const StatsPage = (function() {
     }
 
     function load() {
+        // 防止重复加载
+        if (isLoading) return;
+        isLoading = true;
+        
         showLoadingHints();
         
+        // 设置超时，5秒后自动显示统计数字
+        const timeoutId = setTimeout(() => {
+            isLoading = false;
+            hideLoadingHints();
+            renderStatsOnly();
+            console.warn('Chart.js 加载超时，显示统计数字');
+        }, 5000);
+        
         loadChartJS().then(() => {
+            clearTimeout(timeoutId);
+            isLoading = false;
             chartLoaded = true;
-            loadAttempts = 0;
             hideLoadingHints();
             renderStatsOnly();
         }).catch(() => {
+            clearTimeout(timeoutId);
+            isLoading = false;
             chartLoaded = false;
-            loadAttempts++;
-            if (loadAttempts < 10) {
-                setTimeout(load, 500);
-            } else {
-                hideLoadingHints();
-                renderStatsOnly();
-                console.warn('Chart.js 加载超时，图表功能已禁用');
-            }
+            hideLoadingHints();
+            renderStatsOnly();
+            console.warn('Chart.js 加载失败，显示统计数字');
         });
     }
     
