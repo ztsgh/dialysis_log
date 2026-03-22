@@ -645,19 +645,16 @@
     <script src="js/pages/settings.js"></script>
     <script src="js/app.js"></script>
     
-    <!-- Service Worker 注册 - 非阻塞延迟加载 -->
+    <!-- Service Worker 注册 -->
     <script>
         if ('serviceWorker' in navigator) {
-            // 延迟 1 秒后注册，避免阻塞页面初始加载
-            setTimeout(function() {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(function(registration) {
-                        console.log('ServiceWorker 注册成功:', registration.scope);
-                    })
-                    .catch(function(error) {
-                        console.log('ServiceWorker 注册失败:', error);
-                    });
-            }, 1000);
+            navigator.serviceWorker.register('./sw.js')
+                .then(function(registration) {
+                    console.log('ServiceWorker 注册成功:', registration.scope);
+                })
+                .catch(function(error) {
+                    console.log('ServiceWorker 注册失败:', error);
+                });
         }
         
         // PWA 安装提示
