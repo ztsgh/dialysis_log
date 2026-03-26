@@ -474,6 +474,19 @@ function savePDRecord() {
     Forms.submitPD();
 }
 
+// 保存设置
+function saveSettings() {
+    const settings = {
+        dryWeight: document.getElementById('dry-weight').value,
+        dialysisType: document.getElementById('dialysis-type').value,
+        defaultShift: document.getElementById('default-shift').value,
+        theme: getSettings().theme || 'auto',
+        noteTemplates: getSettings().noteTemplates || []
+    };
+    Data.saveSettings(settings);
+    showToast('设置已保存');
+}
+
 // 快速保存血液透析记录
 function saveQuickHDRecord() {
     const date = document.getElementById('quick-date').value;
