@@ -26,6 +26,8 @@ function showPage(pageId) {
         // 更新底部导航状态
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.remove('active');
+            // 调试：确保导航按钮可点击
+            item.style.pointerEvents = '';
         });
         
         const navMap = {
