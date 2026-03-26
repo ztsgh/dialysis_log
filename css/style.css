@@ -387,6 +387,88 @@ body {
     box-shadow: var(--shadow);
 }
 
+/* 一行添加表单样式 */
+.oneline-form {
+    padding: 16px;
+}
+
+.oneline-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    background: #f5f5f5;
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.oneline-row-auto {
+    background: #e8f4fd;
+}
+
+.oneline-row-auto label {
+    color: var(--primary-dark);
+}
+
+.oneline-row-auto .oneline-value {
+    color: var(--primary-color);
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.oneline-item {
+    flex: 1;
+    min-width: 0;
+}
+
+.oneline-item label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.oneline-item input,
+.oneline-item select {
+    width: 100%;
+    padding: 8px 4px;
+    font-size: 16px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+/* 日期选择器特殊样式 */
+.oneline-date-wrapper input[type="date"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* 使用固定尺寸确保覆盖整个显示区域 */
+    width: 100%;
+    height: 100%;
+    min-height: 40px;
+    opacity: 0;
+    z-index: 10;
+    cursor: pointer;
+    padding: 0;
+    border: none;
+    box-sizing: border-box;
+    /* 确保在所有浏览器中都可点击 */
+    -webkit-appearance: none;
+    appearance: none;
+    /* 确保尺寸正确 */
+    font-size: 16px;
+    line-height: normal;
+}
+
+/* 确保wrapper有正确的高度 */
+.oneline-date-wrapper {
+    min-height: 40px;
+}
+
 /* 快速添加表单样式 */
 .quick-form {
     padding: 16px;
@@ -817,9 +899,77 @@ body {
         width: 100%;
     }
     
+    /* 一行添加表单小屏幕适配 */
+    .oneline-form {
+        padding: 12px;
+    }
+    
+    .oneline-row {
+        flex-wrap: wrap;
+        padding: 10px;
+    }
+    
+    .oneline-item {
+        flex: 0 0 calc(50% - 4px);
+        margin-bottom: 8px;
+    }
+    
+    .oneline-item label {
+        font-size: 10px;
+    }
+    
+    .oneline-item input,
+    .oneline-item select {
+        padding: 6px 2px;
+        font-size: 14px;
+    }
+    
+    .oneline-row-auto .oneline-item {
+        flex: 1;
+    }
+    
+    .oneline-row-auto .oneline-value {
+        font-size: 16px;
+    }
+    
     .calendar-footer {
         padding: 12px;
     }
+    
+    .calendar-footer .btn {
+        min-width: 100px;
+        font-size: 16px;
+        height: 48px;
+        padding: 0 16px;
+        margin: 0 4px;
+    }
+}
+
+/* 一行添加日期选择器 - 全局样式，必须在媒体查询外部 */
+.oneline-date-item {
+    position: relative;
+}
+
+.oneline-date-wrapper {
+    position: relative;
+    width: 100%;
+    /* 使用 block 确保宽度100% */
+    display: block;
+}
+
+.oneline-date-display {
+    display: block;
+    width: 100%;
+    padding: 8px 4px;
+    font-size: 16px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    /* 确保显示文本在输入框下方 */
+    position: relative;
+    z-index: 0;
 }
 
 /* 大屏幕适配 */
@@ -1499,17 +1649,17 @@ body {
 .calendar-footer .btn {
     display: inline-block;
     width: auto;
-    min-width: 200px;
+    min-width: 120px;
     max-width: 100%;
     height: 56px;
-    padding: 0 32px;
+    padding: 0 24px;
     font-size: 18px;
     font-weight: 600;
     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: white;
     border: none;
     border-radius: 12px;
-    margin: 0 auto;
+    margin: 0 8px;
 }
 
 .calendar-header {

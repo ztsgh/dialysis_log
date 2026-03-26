@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Misc
+nul
+
+# Package files (not needed for pure frontend project)
+package.json
+package-lock.json

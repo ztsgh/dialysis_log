@@ -91,9 +91,21 @@ const Forms = (function() {
         
         const shiftSelect = document.getElementById('hd-shift');
         const selectedShift = shiftSelect.value;
+        const dateValue = document.getElementById('hd-date').value;
         
         if (!selectedShift) {
             showToast('请选择透析班次');
+            return;
+        }
+        
+        // 验证日期（与腹膜透析表单保持一致）
+        if (!dateValue) {
+            showToast('请选择透析日期');
+            return;
+        }
+        const dateValidation = Validate.validateDate(dateValue, '透析日期');
+        if (!dateValidation.valid) {
+            showToast(dateValidation.message);
             return;
         }
         
@@ -105,6 +117,7 @@ const Forms = (function() {
         const bpAfter = document.getElementById('hd-bp-after').value;
         
         const validations = [
+            Validate.validateDate(dateValue, '透析日期'),
             Validate.validateWeight(weightBefore, '透析前体重'),
             Validate.validateWeight(weightAfter, '透析后体重'),
             Validate.validateUF(actualUF, '实际脱水量'),
@@ -141,7 +154,7 @@ const Forms = (function() {
         
         const record = {
             type: 'hd',
-            date: document.getElementById('hd-date').value,
+            date: dateValue,
             shift: selectedShift,
             shiftLabel: shiftLabel,
             startTime: document.getElementById('hd-start-time').value,

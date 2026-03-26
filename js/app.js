@@ -59,6 +59,9 @@ function showPage(pageId) {
         } else if (pageId === 'page-record-hd-quick') {
             // 每次进入快速添加页面时初始化默认值
             initQuickAddPage();
+        } else if (pageId === 'page-record-hd-oneline') {
+            // 每次进入一行添加页面时初始化默认值
+            initOneLineAddPage();
         }
     } catch (e) {
         console.error('页面切换错误:', e);
@@ -548,6 +551,117 @@ function initQuickAddPage() {
     if (settings.defaultShift) {
         document.getElementById('quick-shift').value = settings.defaultShift;
     }
+}
+
+// 初始化一行添加页面
+function initOneLineAddPage() {
+    // 计算次数（已有记录数 + 1）
+    const records = getRecords();
+    const count = records.length + 1;
+    document.getElementById('oneline-count').textContent = count;
+    
+    // 设置默认日期为今天
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0];
+    document.getElementById('oneline-date').value = dateStr;
+    
+    // 更新日期显示（MM/DD格式）
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    document.getElementById('oneline-date-display').textContent = month + '/' + day;
+    
+    // 计算周几
+    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    document.getElementById('oneline-weekday').textContent = weekdays[today.getDay()];
+    
+    // 设置默认班次（从设置中读取）
+    const settings = getSettings();
+    if (settings.defaultShift) {
+        document.getElementById('oneline-shift').value = settings.defaultShift;
+    }
+    
+    // 添加日期显示点击事件，手动触发日期选择器（桌面浏览器兼容）
+    const dateDisplay = document.getElementById('oneline-date-display');
+    const dateInput = document.getElementById('oneline-date');
+    if (dateDisplay && dateInput) {
+        dateDisplay.onclick = function() {
+            // 尝试触发日期选择器
+            if (dateInput.showPicker) {
+                try {
+                    dateInput.showPicker();
+                } catch (e) {
+                    dateInput.focus();
+                }
+            } else {
+                dateInput.focus();
+            }
+        };
+    }
+}
+
+// 日期变化时更新周几和日期显示
+function onOneLineDateChange() {
+    const dateInput = document.getElementById('oneline-date');
+    const dateStr = dateInput.value;
+    
+    if (dateStr) {
+        const date = new Date(dateStr);
+        // 更新周几显示
+        const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        document.getElementById('oneline-weekday').textContent = weekdays[date.getDay()];
+        
+        // 更新日期显示（MM/DD格式）
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        document.getElementById('oneline-date-display').textContent = month + '/' + day;
+    }
+}
+
+// 保存一行添加的记录
+function saveOneLineHDRecord() {
+    const date = document.getElementById('oneline-date').value;
+    const shift = document.getElementById('oneline-shift').value;
+    const mode = document.getElementById('oneline-mode').value;
+    const targetUF = document.getElementById('oneline-target-uf').value;
+    const weightBefore = document.getElementById('oneline-weight-before').value;
+    const bed = document.getElementById('oneline-bed').value;
+    
+    // 验证必填字段
+    if (!date) {
+        showToast('请选择日期');
+        return;
+    }
+    if (!weightBefore) {
+        showToast('请输入透析前体重');
+        return;
+    }
+    
+    // 获取班次显示标签
+    const shiftLabel = Helpers.getShiftLabel(shift);
+    
+    // 创建记录
+    const record = {
+        id: Date.now(),
+        type: 'hd',
+        date: date,
+        shift: shift,
+        shiftLabel: shiftLabel,
+        mode: mode || 'normal',
+        targetUF: targetUF,
+        weightBefore: weightBefore,
+        weightAfter: '',
+        bed: bed,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+    
+    // 保存记录
+    Data.addRecord(record);
+    showToast('记录已保存');
+    
+    // 返回首页并刷新
+    showPage('page-home');
+    loadHomePage();
 }
 
 // 编辑记录

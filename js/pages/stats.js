@@ -161,6 +161,11 @@ const StatsPage = (function() {
         
         if (weightChart) weightChart.destroy();
         
+        // 清除之前的空状态提示
+        const parent = ctx.parentElement;
+        const existingEmptyTip = parent.querySelector('.empty-tip');
+        if (existingEmptyTip) existingEmptyTip.remove();
+        
         const records = hdRecords
             .filter(r => r.weightBefore && r.weightAfter)
             .sort((a, b) => {
@@ -171,10 +176,16 @@ const StatsPage = (function() {
             .slice(-15);
         
         if (records.length === 0) {
-            ctx.parentElement.innerHTML = '<p class="empty-tip">暂无体重数据</p>';
+            // 显示空状态提示但不删除Canvas
+            const emptyTip = document.createElement('p');
+            emptyTip.className = 'empty-tip';
+            emptyTip.textContent = '暂无体重数据';
+            ctx.style.display = 'none';
+            parent.appendChild(emptyTip);
             return;
         }
         
+        ctx.style.display = 'block'; // 确保Canvas可见
         const colors = getChartColors();
         
         weightChart = new Chart(ctx, {
@@ -229,6 +240,11 @@ const StatsPage = (function() {
         
         if (ufChart) ufChart.destroy();
         
+        // 清除之前的空状态提示
+        const parent = ctx.parentElement;
+        const existingEmptyTip = parent.querySelector('.empty-tip');
+        if (existingEmptyTip) existingEmptyTip.remove();
+        
         // 筛选有脱水量数据的记录（优先级：实际脱水量 > 目标脱水量 > 体重差值计算）
         const records = hdRecords
             .filter(r => {
@@ -249,10 +265,16 @@ const StatsPage = (function() {
             .slice(-15);
         
         if (records.length === 0) {
-            ctx.parentElement.innerHTML = '<p class="empty-tip">暂无脱水量数据</p>';
+            // 显示空状态提示但不删除Canvas
+            const emptyTip = document.createElement('p');
+            emptyTip.className = 'empty-tip';
+            emptyTip.textContent = '暂无脱水量数据';
+            ctx.style.display = 'none';
+            parent.appendChild(emptyTip);
             return;
         }
         
+        ctx.style.display = 'block'; // 确保Canvas可见
         const colors = getChartColors();
         
         // 计算脱水量：优先实际 > 目标 > 体重差值（kg转ml，乘以1000）
@@ -321,11 +343,22 @@ const StatsPage = (function() {
         
         if (freqChart) freqChart.destroy();
         
+        // 清除之前的空状态提示
+        const parent = ctx.parentElement;
+        const existingEmptyTip = parent.querySelector('.empty-tip');
+        if (existingEmptyTip) existingEmptyTip.remove();
+        
         if (records.length === 0) {
-            ctx.parentElement.innerHTML = '<p class="empty-tip">暂无数据</p>';
+            // 显示空状态提示但不删除Canvas
+            const emptyTip = document.createElement('p');
+            emptyTip.className = 'empty-tip';
+            emptyTip.textContent = '暂无数据';
+            ctx.style.display = 'none';
+            parent.appendChild(emptyTip);
             return;
         }
         
+        ctx.style.display = 'block'; // 确保Canvas可见
         const now = new Date();
         const weeks = [];
         
@@ -398,6 +431,11 @@ const StatsPage = (function() {
         
         if (bpChart) bpChart.destroy();
         
+        // 清除之前的空状态提示
+        const parent = ctx.parentElement;
+        const existingEmptyTip = parent.querySelector('.empty-tip');
+        if (existingEmptyTip) existingEmptyTip.remove();
+        
         const records = hdRecords
             .filter(r => r.bpBefore && r.bpBefore.includes('/'))
             .sort((a, b) => {
@@ -408,10 +446,16 @@ const StatsPage = (function() {
             .slice(-15);
         
         if (records.length === 0) {
-            ctx.parentElement.innerHTML = '<p class="empty-tip">暂无血压数据</p>';
+            // 显示空状态提示但不删除Canvas
+            const emptyTip = document.createElement('p');
+            emptyTip.className = 'empty-tip';
+            emptyTip.textContent = '暂无血压数据';
+            ctx.style.display = 'none';
+            parent.appendChild(emptyTip);
             return;
         }
         
+        ctx.style.display = 'block'; // 确保Canvas可见
         const colors = getChartColors();
         
         bpChart = new Chart(ctx, {
@@ -470,6 +514,11 @@ const StatsPage = (function() {
         
         if (ufrChart) ufrChart.destroy();
         
+        // 清除之前的空状态提示
+        const parent = ctx.parentElement;
+        const existingEmptyTip = parent.querySelector('.empty-tip');
+        if (existingEmptyTip) existingEmptyTip.remove();
+        
         const records = hdRecords
             .filter(r => r.weightBefore && r.weightAfter && r.actualUF)
             .sort((a, b) => {
@@ -480,10 +529,16 @@ const StatsPage = (function() {
             .slice(-15);
         
         if (records.length === 0) {
-            ctx.parentElement.innerHTML = '<p class="empty-tip">暂无超滤数据</p>';
+            // 显示空状态提示但不删除Canvas
+            const emptyTip = document.createElement('p');
+            emptyTip.className = 'empty-tip';
+            emptyTip.textContent = '暂无超滤数据';
+            ctx.style.display = 'none';
+            parent.appendChild(emptyTip);
             return;
         }
         
+        ctx.style.display = 'block'; // 确保Canvas可见
         const ufrData = records.map(r => {
             const weightDiff = Helpers.safeParseFloat(r.weightBefore) - Helpers.safeParseFloat(r.weightAfter);
             const ufr = Helpers.safeParseFloat(r.actualUF);

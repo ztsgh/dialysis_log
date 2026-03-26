@@ -190,7 +190,7 @@ function saveRecords(records) {
 ### Service Worker
 
 - 缓存策略：Cache First
-- 缓存版本：`dialysis-diary-v4`
+- 缓存版本：`dialysis-diary-v12`
 - 缓存资源：`index.html`, `css/style.css`, `js/app.js`, `js/chart.min.js`, `manifest.json`, `icons/icon.svg`
 
 ## 代码审查清单
@@ -359,3 +359,24 @@ function saveRecords(records) {
 ### 待完成
 - [x] 日历在小屏手机排版优化（已完成）
 - [ ] Chart.js 本地化（CDN 访问不稳定时）
+
+### 2026年3月
+
+#### Bug 修复
+- 修复 `clearAllData()` 误删用户模板配置问题
+- 修复血压数据为空时图表崩溃问题
+- 修复 Chart.js CDN 加载失败导致页面卡住问题
+- 统一 Service Worker 缓存版本为 v12
+- 延长 Chart.js 加载超时时间（1秒 → 5秒）
+- 优化后台同步代码，添加 TODO 注释说明预留功能
+
+##### 一行添加页面点击问题修复 (v1.6)
+- 问题：进入"一行添加"页面后整个页面无法点击
+- 根本原因：
+  - `.oneline-date-wrapper` 等CSS样式被错误地放在 `@media (max-width: 375px)` 媒体查询内部
+  - 在屏幕宽度大于375px时，`position: relative` 不生效
+  - 日期输入框的 `position: absolute` 相对于高层级元素定位，覆盖整个视口
+- 解决方案：
+  - 将日期选择器相关样式移到媒体查询外部作为全局样式
+  - 添加 `min-height: 40px` 确保日期输入框点击区域
+  - 添加点击事件处理支持桌面浏览器兼容
